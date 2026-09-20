@@ -39,20 +39,19 @@ def encode(transactions, catalog=CATALOG):
     return [{title: int(title in basket) for title in catalog} for basket in transactions]
 
 
-def train(transactions, min_support=0.1, min_confidence=0.5, max_antecedents=2):
+def train(transactions, min_support=0.1, min_confidence=0.5):
     """Lerne [A, B, ...] → C mit Apriori und Assoziationsregeln aus mlxtend."""
     if not 0 <= min_support <= 1 or not 0 <= min_confidence <= 1:
         raise ValueError("Schwellenwerte müssen zwischen 0 und 1 liegen.")
-    if type(max_antecedents) is not int or not 1 <= max_antecedents <= 3:
-        raise ValueError("Es sind eine bis drei Voraussetzungen erlaubt.")
     n = len(transactions)
     titles = sorted({title for basket in transactions for title in basket})
     if not n or not titles:
         return []
     matrix = pd.DataFrame(encode(transactions, titles), dtype=bool)
     # Bei Support 0 berücksichtigen wir jedes mindestens einmal beobachtete Set.
+    # Feste Laufzeitgrenze für die Schul-Demo: bis zu drei Voraussetzungen + Ziel.
     itemsets = apriori(matrix, min_support=max(min_support, 1 / n),
-                       use_colnames=True, max_len=max_antecedents + 1)
+                       use_colnames=True, max_len=4)
     if itemsets.empty:
         return []
     learned = association_rules(itemsets, num_itemsets=n, metric="confidence",
@@ -78,17 +77,17 @@ def source_label(rule):
 
 
 def matching_rules(likes, rules):
-    """Alle Voraussetzungen müssen gewählt sein; spezifischere Regeln zuerst."""
+    """UND-Abgleich; Rangfolge nach Konfidenz, Support und Lift, ohne Längenbonus."""
     chosen = set(likes)
     matches = [rule for rule in rules
                if set(antecedents(rule)).issubset(chosen)
                and rule["target"] not in chosen and rule["lift"] > 1]
-    return sorted(matches, key=lambda r: (-len(antecedents(r)), -r["lift"],
-                                         -r["confidence"], r["target"], tuple(antecedents(r))))
+    return sorted(matches, key=lambda r: (-r["confidence"], -r["support"], -r["lift"],
+                                         len(antecedents(r)), r["target"], tuple(antecedents(r))))
 
 
 def recommend(likes, rules):
-    """Bevorzuge passende Kombinationen; jede neue Serie erscheint nur einmal."""
+    """Pro Zielserie die bestplatzierte passende Regel, maximal sechs Vorschläge."""
     best = {}
     for rule in matching_rules(likes, rules):
         best.setdefault(rule["target"], rule)

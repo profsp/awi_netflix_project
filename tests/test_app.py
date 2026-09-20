@@ -17,6 +17,7 @@ def test_demo_from_data_to_prediction():
     click(app, "▦ Daten verstehen")
     assert len(app.dataframe) == 1
     click(app, "✳ Regeln lernen")
+    assert len(app.slider) == 2
     click(app, "✳ Modell lernen")
     assert app.session_state["demo_model"]["rules"]
     click(app, "✧ Serien empfehlen")
@@ -24,7 +25,7 @@ def test_demo_from_data_to_prediction():
     assert not app.error
     assert not app.exception
     app.multiselect[0].select("Wednesday").run()
-    assert any("Kombinationsregel:" in item.value and "Cobra Kai" in item.value for item in app.markdown)
+    assert any("Stranger Things UND Wednesday" in str(frame.value) for frame in app.dataframe)
     assert not app.error
 
 
@@ -59,10 +60,13 @@ def test_teacher_survey_publish_and_student_prediction(monkeypatch, tmp_path):
     student.query_params.update({"view": "join", "room": code})
     student.run()
     assert len(student.radio) == 20
-    assert all(radio.value is None for radio in student.radio)
+    assert all(radio.value == "Nein" for radio in student.radio)
     click(student, "Meine Vorlieben teilen →")
     assert store.transactions(code, secret) == []
     assert student.warning
+    student.checkbox[0].check()
+    click(student, "Meine Vorlieben teilen →")
+    assert store.transactions(code, secret) == [[]]
     for radio in student.radio:
         radio.set_value("Ja" if radio.label.split(" · ", 1)[1] in ["Wednesday", "Stranger Things"] else "Nein")
     student.checkbox[0].check()

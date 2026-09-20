@@ -71,7 +71,7 @@ def show_recommendations(model, key, catalog=CATALOG):
     combinations = sum(len(antecedents(rule)) > 1 for rule in matches)
     st.caption(f"Passende Regeln: {len(matches)} · davon Kombinationsregeln: {combinations}. Alle Voraussetzungen einer Regel müssen in deiner Auswahl enthalten sein; weitere ausgewählte Serien sind erlaubt.")
     if len(selected) > 1 and not combinations:
-        st.info("Für diese Auswahl gibt es keine passende Kombinationsregel mit Lift über 1. Einzelregeln werden weiterhin berücksichtigt. Lerne gegebenenfalls erneut mit mindestens zwei erlaubten Voraussetzungen.")
+        st.info("Für diese Auswahl gibt es keine passende Kombinationsregel mit Lift über 1. Einzelregeln werden weiterhin berücksichtigt. Neue Antworten werden erst nach erneutem Lernen einbezogen.")
     if not results:
         st.info("Keine passende Regel mit positivem Zusammenhang gefunden. Probiere andere Serien oder sammelt mehr Antworten. Das Modell erfindet keine Empfehlung.")
     for i, rule in enumerate(results, 1):
@@ -82,9 +82,9 @@ def show_recommendations(model, key, catalog=CATALOG):
     if matches:
         with st.expander("Alle passenden Regeln zu deiner Auswahl"):
             st.dataframe(pd.DataFrame([{"Wenn du ALLE magst": source_label(r), "Dann auch": r["target"],
-                                        "Voraussetzungen": len(antecedents(r)), "Konfidenz": f"{r['confidence']:.0%}",
+                                        "Voraussetzungen": len(antecedents(r)), "Konfidenz": f"{r['confidence']:.0%}", "Support": f"{r['support']:.0%}",
                                         "Lift": round(r["lift"], 2)} for r in matches]), hide_index=True)
-        st.caption("Sortierung: zuerst mehr gemeinsam erfüllte Voraussetzungen, danach Lift und Konfidenz. Pro Zielserie wird die erste Regel angezeigt. Das bevorzugt spezifische Zusammenhänge, ist aber keine Garantie höherer Vorhersagequalität.")
+        st.caption("Sortierung: Konfidenz, danach Support und Lift. Einzel- und Kombinationsregeln werden gleich bewertet; bei ansonsten gleichen Werten wird die kürzere Regel angezeigt. Pro Zielserie zählt nur die bestplatzierte Regel, keine Addition überlappender Regeln.")
     st.caption("Das sind Zusammenhänge in dieser Gruppe, keine Garantie für deinen Geschmack. Konfidenz ist keine gemessene Vorhersagegenauigkeit.")
 
 
@@ -104,10 +104,10 @@ def participant_page(store):
         if room["opened"]:
             with st.form("survey_" + code):
                 st.markdown(f"#### {len(room['catalog'])} Serien · Gefällt dir die Serie?")
-                st.caption("Ja = kenne ich und gefällt mir. Nein = gefällt mir nicht oder kenne ich noch nicht. Bitte jede Zeile beantworten; nichts ist vorausgewählt.")
+                st.caption("Bei allen Serien ist Nein vorausgewählt. Stelle nur die Serien auf Ja, die du kennst und magst. Nein bedeutet: gefällt mir nicht, kenne ich nicht oder nicht bewertet. Bitte prüfe deine Auswahl vor dem Absenden.")
                 answers = {}
                 for index, title in enumerate(room["catalog"], 1):
-                    answers[title] = st.radio(f"{index:02d} · {title}", ["Ja", "Nein"], index=None,
+                    answers[title] = st.radio(f"{index:02d} · {title}", ["Ja", "Nein"], index=1,
                                               horizontal=True, key=f"vote_{code}_{title}")
                 consent = st.checkbox("Meine Auswahl darf für diese Unterrichtsdemonstration verwendet werden.")
                 submitted = st.form_submit_button("Meine Vorlieben teilen →", type="primary")
@@ -256,7 +256,7 @@ def lab(store):
                         del st.session_state.owner
                         st.rerun()
         elif node == 1:
-            st.write("Der Computer braucht Zahlen: Jede Zeile ist eine Antwort, jede Spalte eine Serie. **1 = Ja**, **0 = Nein**. Nein umfasst auch „Kenne ich nicht“ und ist deshalb kein sicherer Beleg für Abneigung. Das Modell lernt aus gemeinsamem Ja.")
+            st.write("Der Computer braucht Zahlen: Jede Zeile ist eine Antwort, jede Spalte eine Serie. **1 = Ja**, **0 = Nein**. Nein ist vorausgewählt und umfasst auch unbekannte oder nicht bewertete Serien. Es ist kein sicherer Beleg für Abneigung. Das Modell lernt aus gemeinsamem Ja.")
             if data:
                 frame = pd.DataFrame(encode(data, catalog))
                 st.dataframe(frame.style.map(lambda v: "background-color: #22594f; color: #ffffff" if v else "color: #8290aa"), use_container_width=True, height=320)
@@ -271,10 +271,8 @@ def lab(store):
             left, right = st.columns(2)
             support = left.slider("Mindestens so häufig gemeinsam (Support)", 1, 100, 10, format="%d%%", key="support_" + scope)
             confidence = right.slider("Mindestens dieser Anteil mag auch B (Konfidenz)", 1, 100, 50, format="%d%%", key="confidence_" + scope)
-            max_antecedents = st.slider("Maximale Anzahl Serien links vom Pfeil", 1, 3, 2, key="antecedents_" + scope,
-                                        help="2 lernt Einzelregeln und Kombinationen aus zwei Serien. Rechts steht jeweils eine neue Serie.")
             if st.button("✳ Modell lernen" if demo else "✳ Modell lernen & für die Klasse veröffentlichen", type="primary", disabled=not data):
-                model = {"rules": train(data, support / 100, confidence / 100, max_antecedents), "n": len(data), "fingerprint": fingerprint(data), "support": support, "confidence": confidence, "max_antecedents": max_antecedents, "created": datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M UTC")}
+                model = {"rules": train(data, support / 100, confidence / 100), "n": len(data), "fingerprint": fingerprint(data), "support": support, "confidence": confidence, "created": datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M UTC")}
                 if demo:
                     st.session_state.demo_model = model
                 else:
@@ -283,9 +281,9 @@ def lab(store):
             if model:
                 if model["fingerprint"] != fingerprint(data):
                     st.warning("Die Antworten haben sich seit dem Training geändert. Erneut lernen, um sie zu berücksichtigen.")
-                if (support, confidence, max_antecedents) != (model["support"], model["confidence"], model.get("max_antecedents", 1)):
+                if (support, confidence) != (model["support"], model["confidence"]):
                     st.info("Die Regler wurden geändert. Klicke auf „Modell lernen“, um die neuen Werte anzuwenden.")
-                st.caption(f"Gespeichertes Modell: {model['n']} Antworten · Support ≥ {model['support']} % · Konfidenz ≥ {model['confidence']} % · bis zu {model.get('max_antecedents', 1)} Voraussetzungen")
+                st.caption(f"Gespeichertes Modell: {model['n']} Antworten · Support ≥ {model['support']} % · Konfidenz ≥ {model['confidence']} %")
                 rules = model["rules"]
                 if rules:
                     example = next((r for r in rules if isinstance(r['source'], list) and len(r['source']) > 1), rules[0])

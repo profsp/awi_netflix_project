@@ -43,8 +43,7 @@ def test_combination_metrics_and_all_antecedents_required():
     assert recommend(["B"], [rule]) == []
     assert recommend(["A", "B"], [rule]) == [rule]
     assert recommend(["A", "B", "C"], [rule]) == []
-    assert all(len(r["source"]) == 1 for r in train(data, 0, 0, 1))
-    assert any(len(r["source"]) == 3 for r in train([["A", "B", "C", "D"], []], 0, 0, 3))
+    assert any(len(r["source"]) == 3 for r in train([["A", "B", "C", "D"], []], 0, 0))
     assert recommend(["A"], [{**rule, "source": "A"}])
 
 
@@ -54,17 +53,25 @@ def test_catalog_and_demo_consistency():
     assert all(set(row).issubset(CATALOG) for row in demo_data())
 
 
-def test_combinations_take_priority_over_single_rules_and_allow_extra_likes():
+def test_confidence_over_length_and_all_matching_rules_remain_visible():
     from serieslab.model import matching_rules
-    single = dict(source=["A"], target="C", lift=4, confidence=.9)
-    pair = dict(source=["A", "B"], target="C", lift=2, confidence=.8)
-    triple = dict(source=["A", "B", "D"], target="C", lift=1.5, confidence=.7)
+    single = dict(source=["A"], target="C", lift=4, confidence=.9, support=.3)
+    pair = dict(source=["A", "B"], target="C", lift=2, confidence=.8, support=.2)
+    triple = dict(source=["A", "B", "D"], target="C", lift=1.5, confidence=.7, support=.1)
     rules = [single, pair, triple]
     assert recommend(["A"], rules) == [single]
-    assert recommend(["A", "B"], rules) == [pair]
-    assert recommend(["A", "B", "D", "Extra"], rules) == [triple]
-    assert matching_rules(["A", "B"], rules) == [pair, single]
+    assert recommend(["A", "B"], rules) == [single]
+    assert recommend(["A", "B", "D", "Extra"], rules) == [single]
+    assert matching_rules(["A", "B"], rules) == [single, pair]
     assert recommend(["A", "B", "C"], rules) == []
-    # Gleich spezifische Regeln werden weiter nach Lift und Konfidenz sortiert.
-    other = dict(source=["A", "D"], target="C", lift=3, confidence=.6)
+    # Eine bessere Kombinationsregel gewinnt unabhängig von ihrer Länge.
+    other = dict(source=["A", "D"], target="C", lift=3, confidence=.95, support=.1)
     assert recommend(["A", "B", "D"], [single, pair, other]) == [other]
+
+
+def test_support_tiebreak_deduplication_and_no_artificial_boost():
+    single = dict(source=["A"], target="C", confidence=.8, support=.4, lift=2)
+    rare = dict(source=["A", "B"], target="D", confidence=.8, support=.1, lift=8)
+    assert recommend(["A", "B"], [rare, single, rare]) == [single, rare]
+    equivalent = {**single, "source": ["A", "B"]}
+    assert recommend(["A", "B"], [equivalent, single]) == [single]
