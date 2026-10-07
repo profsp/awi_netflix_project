@@ -21,7 +21,7 @@ python -m venv .venv
 1. **Mission:** Zwei Feeds für dasselbe fiktive Profil vergleichen, zunächst eine Vermutung abgeben und die Leitfrage entdecken: Warum verändert die Trainingscommunity den Feed?
 2. **Experiment:** Eine Hypothese wählen und zunächst nur eine Generatorannahme verändern. Einzelne Personen, Chancen, Transaktionen, Posts und die 0/1-Matrix liegen in einem optionalen Vertiefungstab.
 3. **Muster erklären:** Mindest-Support und Mindest-Konfidenz einstellen. Apriori findet häufige Post-Kombinationen; `association_rules()` erzeugt Regeln. Die Oberfläche erklärt zuerst „Wie häufig?“ und „Wie zuverlässig im Datensatz?“; Lift, Tabellen und Python-Code sind Vertiefungen.
-4. **Feed gestalten:** Als fiktives Produktteam „Nur Relevanz“ und „Mit Perspektivenvielfalt“ vergleichen, den Zielkonflikt anhand von Konfidenz, Zahl der Modell-Tags und Spannweite bewerten und eine begründete Produktentscheidung treffen. Ein Szenario lässt sich speichern und nach Änderung genau einer Annahme vergleichen.
+4. **Feed gestalten:** Das identische Testprofil mit drei Produktreglern untersuchen: Anteil Assoziationsregeln vs. Chronik, Mindest-Lift und Gewicht der Perspektivenvielfalt. Feed und Balkendiagramm der politischen Modell-Tags reagieren live. Eine Gestaltung A lässt sich speichern und mit B vergleichen.
 
 Alle Schritte zeigen den tatsächlich verwendeten Python-Code in einem aufklappbaren Bereich. Die Navigation bleibt auf schmalen Smartphone-Bildschirmen als 2×2-Auswahl bedienbar; breite Datentabellen sind horizontal scrollbar. Für eine kurze Studienorientierung kann man Mission, eine Regel und die Produktentscheidung durchlaufen, ohne Matrix oder Code zu öffnen.
 
@@ -91,11 +91,13 @@ Die abschließende Produktentscheidung hat absichtlich keine Musterlösung. Für
 
 ## Experimente für Studierende
 
-**A. Gleiches Profil, andere Bevölkerung:** Szenario A speichern, nur die Tendenz ändern, Daten erzeugen und neu lernen. Gleiches Testprofil, gleiche Schwellen, gleicher Seed. Welche Posts wechseln? Dies ist ein kontrollierter Szenarienvergleich, kein randomisierter A/B-Test mit realen Nutzern.
+**A. Gleiches Testprofil, andere Trainingscommunity:** Nur die zwei Ausgangslikes des Testprofils bleiben gleich. Die jeweils 300 anderen synthetischen Profile bilden verschiedene Trainingscommunities und erzeugen deshalb andere Regeln und neue Empfehlungen.
+
+**B. Gleiche Daten, andere Produktentscheidung:** Gestaltung A speichern, nur einen Feedregler ändern und direkt Feedplätze sowie Verteilung der Modell-Tags vergleichen.
 
 **B. Ohne politische Nähe:** Ähnlichkeitsliebe auf 0 stellen. Themeninteressen können weiterhin Regeln erzeugen. Ein verbliebener politisch markierter Treffer beweist deshalb keine politische Ursache.
 
-**C. Polarisierung bei gleicher Mitte:** Tendenz auf 0 belassen, Polarisierung ändern. Die Mitte einer Verteilung sagt nichts darüber aus, ob sich zwei gegensätzliche Gruppen gegenüberstehen.
+**D. Polarisierung bei gleicher Mitte:** Tendenz auf 0 belassen, Polarisierung ändern. Die Mitte einer Verteilung sagt nichts darüber aus, ob sich zwei gegensätzliche Gruppen gegenüberstehen.
 
 **D. Zufall und Stichprobengröße:** Gleiche Regler, anderer Seed; anschließend mehr Personen. Welche Regeln sind stabil? Trainingskonfidenz ist keine auf neuen Personen geprüfte Genauigkeit.
 

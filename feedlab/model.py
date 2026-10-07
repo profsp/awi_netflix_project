@@ -46,25 +46,27 @@ def source_label(rule):
     return " UND ".join(antecedents(rule))
 
 
-def matching_rules(likes, rules):
+def matching_rules(likes, rules, min_lift=1.0):
     """UND-Abgleich; Rangfolge nach Konfidenz, Support und Lift, ohne Längenbonus."""
     chosen = set(likes)
     matches = [rule for rule in rules
                if set(antecedents(rule)).issubset(chosen)
-               and rule["target"] not in chosen and rule["lift"] > 1]
+               and rule["target"] not in chosen and rule["lift"] > 1
+               and rule["lift"] >= min_lift]
     return sorted(matches, key=lambda r: (-r["confidence"], -r["support"], -r["lift"],
                                          len(antecedents(r)), r["target"], tuple(antecedents(r))))
 
 
-def recommend(likes, rules):
+def recommend(likes, rules, min_lift=1.0):
     """Pro Zielpost die bestplatzierte passende Regel, maximal sechs Vorschläge."""
     best = {}
-    for rule in matching_rules(likes, rules):
+    for rule in matching_rules(likes, rules, min_lift):
         best.setdefault(rule["target"], rule)
     return list(best.values())[:6]
 
 
-def recommend_diverse(likes, rules, positions, limit=6, relevance_weight=0.7):
+def recommend_diverse(likes, rules, positions, limit=6, relevance_weight=0.7,
+                      min_lift=1.0):
     """Greedy Neuordnung: Regelstärke plus Abstand zu bereits gewählten Positionen.
 
     Die Regeln und Kandidaten bleiben gleich. Nur die Rangfolge ändert sich.
@@ -72,7 +74,7 @@ def recommend_diverse(likes, rules, positions, limit=6, relevance_weight=0.7):
     """
     candidates = []
     seen_targets = set()
-    for rule in matching_rules(likes, rules):
+    for rule in matching_rules(likes, rules, min_lift):
         if rule["target"] not in seen_targets:
             candidates.append(rule)
             seen_targets.add(rule["target"])
@@ -80,7 +82,7 @@ def recommend_diverse(likes, rules, positions, limit=6, relevance_weight=0.7):
     while candidates and len(selected) < limit:
         def score(rule):
             if not selected:
-                perspective_gain = 0
+                return (rule["confidence"], rule["support"], rule["lift"])
             else:
                 perspective_gain = min(
                     abs(positions[rule["target"]] - positions[item["target"]]) / 2
@@ -93,3 +95,25 @@ def recommend_diverse(likes, rules, positions, limit=6, relevance_weight=0.7):
         selected.append(winner)
         candidates.remove(winner)
     return selected
+
+
+def compose_feed(likes, rules, positions, recency, rule_share=0.7,
+                 perspective_weight=0.3, min_lift=1.0, limit=6):
+    """Mische Regel-Empfehlungen mit einer simulierten Chronik."""
+    if not 0 <= rule_share <= 1 or not 0 <= perspective_weight <= 1:
+        raise ValueError("Gewichte müssen zwischen 0 und 1 liegen.")
+    ranked = recommend_diverse(
+        likes, rules, positions, limit=limit,
+        relevance_weight=1 - perspective_weight, min_lift=min_lift
+    )
+    wanted_rules = round(limit * rule_share)
+    entries = [{"target": rule["target"], "origin": "Regel", "rule": rule}
+               for rule in ranked[:wanted_rules]]
+    excluded = set(likes) | {entry["target"] for entry in entries}
+    chronological = sorted(
+        (pid for pid in recency if pid not in excluded),
+        key=lambda pid: (recency[pid], pid)
+    )
+    entries.extend({"target": pid, "origin": "Chronik", "rule": None}
+                   for pid in chronological[:limit - len(entries)])
+    return entries

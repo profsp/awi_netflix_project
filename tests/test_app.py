@@ -15,7 +15,7 @@ def test_entire_path_and_session_persistence():
     assert not app.exception
     assert len(app.session_state["dataset"]["users"]) == 300
     app.radio(key="opening_prediction").set_value("Die Feeds unterscheiden sich").run()
-    click(app, "Feeds vergleichen")
+    click(app, "Trainingswelten und Feeds vergleichen")
     assert app.session_state["opening_revealed"]
     click(app, "Mission starten →")
     assert len(app.dataframe) == 3
@@ -26,12 +26,12 @@ def test_entire_path_and_session_persistence():
     assert app.session_state["model"]["rules"]
     click(app, "✦  Feed gestalten")
     assert app.multiselect[0].value == ["P02", "P07"]
-    assert {tab.label for tab in app.tabs} >= {"Nur Relevanz", "Mit Perspektivenvielfalt", "So entscheidet das System"}
-    app.radio(key="product_decision").set_value("Mit Perspektivenvielfalt").run()
+    assert {slider.key for slider in app.slider} >= {"design_rule_share", "design_min_lift", "design_perspective"}
+    app.radio(key="product_decision").set_value("Mehr Perspektivenvielfalt").run()
     assert any("Wirtschaftsinformatik" in info.value for info in app.info)
     app.selectbox(key="profile").set_value("Rechtes Testprofil").run()
     assert app.multiselect[0].value == ["P04", "P09"]
-    click(app, "Szenario A merken")
+    click(app, "Gestaltung A merken")
     saved = app.session_state["comparison"]
     click(app, "▦  Experiment")
     app.slider(key="gen_tendency").set_value(30).run()
@@ -74,7 +74,7 @@ def test_no_rules_and_empty_profile_are_valid_outcomes():
     click(app, "⌘  Regeln mit Apriori lernen")
     assert app.session_state["model"]["rules"] == []
     click(app, "✦  Feed gestalten")
-    assert any("Keine passende Empfehlung" in info.value for info in app.info)
+    assert any("Chronik" in caption.value for caption in app.caption)
     app.multiselect[0].set_value([]).run()
     assert not app.exception
-    assert any("mindestens einen Like" in info.value for info in app.info)
+    assert any("Ohne Ausgangslikes" in info.value for info in app.info)

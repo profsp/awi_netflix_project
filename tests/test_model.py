@@ -1,5 +1,5 @@
 import pytest
-from feedlab.model import encode, train, recommend, recommend_diverse
+from feedlab.model import encode, train, recommend, recommend_diverse, compose_feed
 from feedlab.synthetic import Settings, generate, transactions
 
 
@@ -91,3 +91,20 @@ def test_perspective_strategy_uses_same_candidates_but_changes_order():
     assert diverse[0] == rules[0]
     assert diverse[1] == rules[2]
     assert {r["target"] for r in diverse} == {r["target"] for r in relevant}
+
+
+def test_feed_composition_exposes_product_controls():
+    rules = [
+        dict(source=["A"], target="B", confidence=.9, support=.4, lift=2),
+        dict(source=["A"], target="C", confidence=.8, support=.3, lift=1.5),
+    ]
+    positions = {"A": 0, "B": -.5, "C": .5, "D": 1, "E": -1}
+    recency = {"A": 1, "B": 50, "C": 40, "D": 5, "E": 10}
+    chronological = compose_feed(["A"], rules, positions, recency, rule_share=0, limit=3)
+    assert [item["target"] for item in chronological] == ["D", "E", "C"]
+    assert all(item["origin"] == "Chronik" for item in chronological)
+    mixed = compose_feed(["A"], rules, positions, recency, rule_share=.67, limit=3)
+    assert [item["origin"] for item in mixed] == ["Regel", "Regel", "Chronik"]
+    strict = compose_feed(["A"], rules, positions, recency, rule_share=1, min_lift=1.8, limit=3)
+    assert strict[0]["target"] == "B" and strict[0]["origin"] == "Regel"
+    assert all(item["target"] != "A" for item in strict)

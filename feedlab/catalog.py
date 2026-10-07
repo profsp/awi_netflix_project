@@ -46,6 +46,11 @@ POSTS = [
     for topic_index, (topic, texts) in enumerate(_TEXTS.items())
     for stance_index, (position, (title, body)) in enumerate(zip(POSITIONS, texts))
 ]
+# Fiktive Minuten seit Veröffentlichung für die Chronik-Simulation.
+_RECENCY = [8, 74, 19, 116, 43, 52, 6, 97, 27, 141,
+            13, 88, 35, 4, 126, 61, 22, 109, 31, 156]
+for post, minutes in zip(POSTS, _RECENCY):
+    post["minutes_ago"] = minutes
 POST_BY_ID = {post["id"]: post for post in POSTS}
 CATALOG = list(POST_BY_ID)
 

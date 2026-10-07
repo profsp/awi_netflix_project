@@ -9,7 +9,7 @@ import pandas as pd
 import streamlit as st
 
 from feedlab.catalog import CATALOG, POSTS, POST_BY_ID, POSITIONS, PROFILES, post_label
-from feedlab.model import (encode, train, recommend, recommend_diverse,
+from feedlab.model import (encode, train, recommend, recommend_diverse, compose_feed,
                            matching_rules, antecedents, source_label)
 from feedlab.synthetic import Settings, generate, transactions, dataset_id
 
@@ -70,15 +70,16 @@ def defaults():
         widget = "gen_" + key
         st.session_state[widget] = st.session_state.get(widget, value)
     for key, value in {"support": 8, "confidence": 55, "profile": "Linkes Testprofil",
-                       "feed_likes": list(PROFILES["Linkes Testprofil"])}.items():
+                       "feed_likes": list(PROFILES["Linkes Testprofil"]), "design_rule_share": 70,
+                       "design_min_lift": 1.1, "design_perspective": 30}.items():
         st.session_state[key] = st.session_state.get(key, value)
 
 
-def post_card(post_id, counts=None, rule=None):
+def post_card(post_id, counts=None, rule=None, note=None):
     post = POST_BY_ID[post_id]
     count = counts.get(post_id, 0) if counts is not None else None
     like_meta = f"♡ {count} synthetische Likes" if count is not None else "✦ Feed-Kandidat"
-    explanation = ""
+    explanation = f'<div class="reason">{escape(note)}</div>' if note else ""
     if rule:
         names = " UND ".join(post_label(pid) for pid in antecedents(rule))
         explanation = (f'<div class="reason"><b>Weil das Testprofil {escape(names)} gelikt hat</b><br>'
@@ -108,39 +109,56 @@ def opening_comparison():
     for title, tendency in [("Community A", -70), ("Community B", 70)]:
         dataset = generate(Settings(tendency=tendency, seed=42))
         rules = train(transactions(dataset), .08, .55)
-        scenarios.append({"title": title, "tendency": tendency,
-                          "feed": [rule["target"] for rule in recommend(likes, rules)]})
+        positions = [user["position"] for user in dataset["users"]]
+        scenarios.append({
+            "title": title, "tendency": tendency,
+            "mean_position": sum(positions) / len(positions),
+            "users": len(positions),
+            "feed": [rule["target"] for rule in recommend(likes, rules)]
+        })
     return likes, scenarios
 
 
 def mission_page():
     likes, scenarios = opening_comparison()
-    st.markdown("## Gleiche Likes. Anderer Feed.")
-    st.write("Du arbeitest im Produktteam einer Social-Media-Plattform. Ein fiktives Profil hat in beiden Szenarien exakt dieselben Posts gelikt:")
+    st.markdown("## Gleiches Testprofil. Zwei Trainingswelten.")
+    st.write("Nicht die ganze Community hat dieselben Likes. **Nur das einzelne Testprofil** startet in beiden Szenarien mit denselben zwei Likes:")
+    st.markdown("### 1 · Identisches Ausgangssignal")
     st.write(" · ".join(post_label(pid) for pid in likes))
-    choice = st.radio("Was erwartest du?", ["Beide Feeds sind gleich", "Die Feeds unterscheiden sich"],
+    with st.expander("Die beiden Ausgangslikes lesen"):
+        for pid in likes:
+            post_card(pid, note="Bereits gelikt · Eingabe des Testprofils")
+    st.info("Community A und B bestehen jeweils aus 300 anderen simulierten Personen. Deren Like-Muster unterscheiden sich. Aus ihnen lernt das Modell seine Regeln.")
+    choice = st.radio("Was erwartest du für die neuen Empfehlungen?", ["Beide Feeds sind gleich", "Die Feeds unterscheiden sich"],
                       index=None, key="opening_prediction")
-    if st.button("Feeds vergleichen", type="primary", width="stretch"):
+    if st.button("Trainingswelten und Feeds vergleichen", type="primary", width="stretch"):
         st.session_state.opening_revealed = True
     if st.session_state.get("opening_revealed"):
         if choice is None:
             st.caption("Du kannst zuerst eine Vermutung wählen — der Vergleich ist trotzdem sichtbar.")
         elif choice == "Die Feeds unterscheiden sich":
-            st.success("Deine Vermutung passt zu diesem Simulationslauf.")
+            st.success("Deine Vermutung passt: gleiche Eingabe, aber andere gelernte Regeln aus anderen Trainingsdaten.")
         else:
-            st.info("Überraschung: Die Likes des Profils sind gleich, aber die gelernten Umgebungen unterscheiden sich.")
+            st.info("Die zwei Ausgangslikes sind gleich. Die Likes der 300 Trainingsprofile unterscheiden sich — deshalb entstehen andere Regeln.")
+        st.markdown("### 2 · Verschiedene Trainingscommunities")
+        cols = st.columns(2)
+        for col, scenario in zip(cols, scenarios):
+            col.metric(scenario["title"], f'{scenario["mean_position"]:+.2f}', help="Mittlere simulierte Position der Trainingsprofile")
+            col.caption(f'{scenario["users"]} andere Profile · Generator-Tendenz {scenario["tendency"]:+d}')
+        st.caption("Die Werte beschreiben die synthetischen Trainingsprofile, nicht das Testprofil und keine realen Personen.")
+        st.markdown("### 3 · Neue Empfehlungen")
+        st.write("P02 und P07 bleiben die Eingabe. Die folgenden Posts sind **neue Ausgaben des Modells** und dürfen daher andere IDs haben.")
         tabs = st.tabs([scenario["title"] for scenario in scenarios])
         for tab, scenario in zip(tabs, scenarios):
             with tab:
-                st.caption(f"Politische Tendenz der fiktiven Trainingscommunity: {scenario['tendency']:+d}")
+                st.caption(f'Gelernt aus {scenario["users"]} anderen Profilen · mittlere Position {scenario["mean_position"]:+.2f}')
                 for pid in scenario["feed"]:
-                    post_card(pid)
+                    post_card(pid, note=f'Neue Empfehlung aus {scenario["title"]} · nicht bereits gelikt')
         st.markdown("### Deine Mission")
-        st.write("Finde heraus, **warum** derselbe Ausgangspunkt zu anderen Empfehlungen führt. Entscheide danach, ob deine Plattform nur geschätzte Relevanz oder zusätzlich Perspektivenvielfalt berücksichtigen soll.")
+        st.write("Finde heraus, wie Trainingsdaten, Assoziationsregeln und Produktregler den Feed verändern. Das Testprofil bleibt dabei kontrolliert gleich.")
         st.button("Mission starten →", on_click=go, args=(1,), type="primary", width="stretch")
     else:
-        st.caption("Die Daten sind vollständig synthetisch. Deine Auswahl wird nicht gespeichert und sagt nichts über deine politische Haltung aus.")
-
+        st.caption("Alle Profile, Posts und Communities sind synthetisch. Deine Auswahl wird nicht gespeichert.")
 
 def generator_page():
     st.markdown("## Verändere genau eine Annahme.")
@@ -279,26 +297,27 @@ def custom_profile():
     st.session_state.profile = "Eigenes fiktives Profil"
 
 
-def feed_metrics(results):
-    if not results:
-        return {"confidence": 0, "perspectives": 0, "spread": 0}
-    positions = [POST_BY_ID[rule["target"]]["position"] for rule in results]
+def feed_metrics(entries):
+    if not entries:
+        return {"rules": 0, "chronology": 0, "perspectives": 0, "mean": 0}
+    positions = [POST_BY_ID[item["target"]]["position"] for item in entries]
     return {
-        "confidence": sum(rule["confidence"] for rule in results) / len(results),
-        "perspectives": len({POST_BY_ID[rule["target"]]["label"] for rule in results}),
-        "spread": max(positions) - min(positions),
+        "rules": sum(item["origin"] == "Regel" for item in entries),
+        "chronology": sum(item["origin"] == "Chronik" for item in entries),
+        "perspectives": len({POST_BY_ID[item["target"]]["label"] for item in entries}),
+        "mean": sum(positions) / len(positions),
     }
 
 
 def feed_page(dataset, counts):
-    st.markdown("## Du entscheidest, was der Feed optimiert.")
-    st.write("Du bist jetzt im Produktteam. Soll die Plattform nur die stärksten gelernten Regeln nutzen — oder bewusst unterschiedliche Modell-Perspektiven in die Rangfolge einbeziehen?")
+    st.markdown("## Gestalte den Feed selbst.")
+    st.write("Das Testprofil liefert die Eingabe. Du legst nun fest, wie stark gelernte Regeln, Aktualität und Perspektivenvielfalt die sechs Feedplätze steuern.")
     st.selectbox("Testprofil", list(PROFILES) + ["Eigenes fiktives Profil"], key="profile", on_change=select_profile)
     selected = st.multiselect("Bisherige Likes des Testprofils", CATALOG, format_func=post_label, key="feed_likes", on_change=custom_profile)
-    st.caption("Das sind Rollen im Experiment, keine Frage nach deiner politischen Haltung. Diese Auswahl verändert die Trainingsdaten nicht.")
+    st.caption("Die Likes bleiben beim Verschieben der Regler gleich. So siehst du den Effekt der Produktentscheidung.")
     with st.expander("Die gelikten Posts lesen"):
         for pid in selected:
-            post_card(pid, counts)
+            post_card(pid, counts, note="Bereits gelikt · kein neuer Feedpost")
         if not selected:
             st.write("Noch keine Likes ausgewählt.")
     model = st.session_state.model
@@ -306,79 +325,79 @@ def feed_page(dataset, counts):
         st.info("Zuerst im dritten Schritt Regeln lernen. Dann kann der Feed das Modell anwenden.")
         st.button("Zum Lernen →", on_click=go, args=(2,), width="stretch")
         return
-    matches = matching_rules(selected, model["rules"])
-    results = recommend(selected, model["rules"])
+
+    st.markdown("### Deine Gestaltungsregler")
+    rule_share = st.slider("Anteil regelbasierter Empfehlungen", 0, 100, step=10, key="design_rule_share", format="%d %%",
+                           help="0 % zeigt nur die simulierte Chronik. 100 % füllt den Feed soweit möglich mit passenden Assoziationsregeln.")
+    min_lift = st.slider("Mindest-Lift für Regelposts", 1.0, 3.0, step=.1, key="design_min_lift",
+                         help="Höhere Werte lassen nur Regeln zu, deren Zielpost gegenüber seiner allgemeinen Beliebtheit stärker überrepräsentiert ist.")
+    perspective = st.slider("Gewicht der Perspektivenvielfalt", 0, 100, step=10, key="design_perspective", format="%d %%",
+                            help="Ordnet passende Regelposts neu: 0 % priorisiert Konfidenz, höhere Werte belohnen Abstand zu bereits gewählten Modell-Tags.")
     positions = {pid: POST_BY_ID[pid]["position"] for pid in CATALOG}
-    diverse_results = recommend_diverse(selected, model["rules"], positions)
-    st.caption(f"{len(matches)} passende Regeln · davon {sum(len(antecedents(r)) > 1 for r in matches)} Kombinationsregeln · maximal 6 neue Posts")
-    relevance_tab, diversity_tab, why_tab = st.tabs(["Nur Relevanz", "Mit Perspektivenvielfalt", "So entscheidet das System"])
-    with relevance_tab:
-        if not selected:
-            st.info("Wähle mindestens einen Like für das Testprofil.")
-        elif not results:
-            st.info("Keine passende Empfehlung mit Lift über 1. Andere fiktive Likes oder andere Trainingsschwellen können das ändern.")
-        for rule in results:
-            post_card(rule["target"], counts, rule)
-    with diversity_tab:
-        st.caption("Dieselben Regelkandidaten, andere Rangfolge: 70 % Konfidenz + 30 % Abstand zu bereits ausgewählten Modell-Positionen.")
-        if not diverse_results:
-            st.info("Keine passenden Kandidaten für dieses Testprofil.")
-        for rule in diverse_results:
-            post_card(rule["target"], counts, rule)
-    with why_tab:
-        st.write("**Gemeinsamer Kandidatenpool:** Alle Likes links müssen gewählt sein (UND). Bereits gelikte Zielposts und Regeln mit Lift ≤ 1 werden ausgeschlossen.")
-        st.write("**Nur Relevanz:** Konfidenz zuerst, danach Support und Lift. Pro Zielpost zählt die bestplatzierte Regel.")
-        st.write("**Mit Perspektivenvielfalt:** Das Lab kombiniert 70 % Konfidenz mit 30 % Abstand zu bereits ausgewählten politischen Modell-Tags. Diese Gewichtung ist eine Produktentscheidung, kein von den Daten gelernter Wert.")
+    recency = {pid: POST_BY_ID[pid]["minutes_ago"] for pid in CATALOG}
+    matches = matching_rules(selected, model["rules"], min_lift)
+    entries = compose_feed(selected, model["rules"], positions, recency,
+                           rule_share / 100, perspective / 100, min_lift)
+    metrics = feed_metrics(entries)
+    a, b, c = st.columns(3)
+    a.metric("Regelposts", metrics["rules"])
+    b.metric("Chronikposts", metrics["chronology"])
+    c.metric("Perspektiv-Tags", metrics["perspectives"])
+    st.caption(f"{len(matches)} passende Regeln erfüllen den Lift-Filter · Chronik = neueste noch nicht gelikte Posts nach fiktivem Zeitstempel")
+
+    st.markdown("### Dein gestalteter Feed")
+    if not selected:
+        st.info("Ohne Ausgangslikes kann keine Regel passen. Die Chronik kann trotzdem Posts liefern.")
+    for rank, item in enumerate(entries, 1):
+        if item["origin"] == "Regel":
+            post_card(item["target"], counts, item["rule"])
+        else:
+            minutes = POST_BY_ID[item["target"]]["minutes_ago"]
+            post_card(item["target"], counts, note=f"Platz {rank} · Chronik: vor {minutes} Minuten veröffentlicht · ohne Assoziationsregel")
+
+    st.markdown("### Politische Modell-Tags im Feed")
+    distribution = Counter(POST_BY_ID[item["target"]]["label"] for item in entries)
+    st.bar_chart(pd.Series({label: distribution[label] for label in POSITIONS.values()}, name="Posts"), color="#1d9bf0")
+    st.metric("Mittlere Modell-Position", f'{metrics["mean"]:+.2f}')
+    st.caption("−1 = stark links, +1 = stark rechts. Verändere einen Regler und beobachte Feed und Balken direkt. Die Tags sind didaktische Setzungen, keine Messung deiner Haltung.")
+
+    with st.expander("So berechnet das System den Feed"):
+        st.write("**Regelanteil:** Reserviert von sechs Plätzen den gewählten Anteil für passende Assoziationsregeln. Fehlen genügend Regelkandidaten, füllt die Chronik auf.")
+        st.write("**Mindest-Lift:** Filtert Regelkandidaten. Lift über 1 bedeutet, dass der Zielpost bei den Ausgangslikes häufiger vorkommt als allgemein.")
+        st.write("**Perspektivenvielfalt:** Verändert nur die Reihenfolge der Regelkandidaten. Der erste Post folgt der stärksten Regel; danach zählen Konfidenz und Abstand zu bereits gewählten Tags.")
+        st.write("**Chronik:** Wählt die neuesten, noch nicht gelikten Posts anhand fiktiver Veröffentlichungszeiten. Sie verwendet keine politische Regel.")
         if matches:
-            st.dataframe(pd.DataFrame([{"Wenn ALLE": source_label(r), "Dann": r["target"], "Konfidenz": f"{r['confidence']:.0%}",
-                                       "Support": f"{r['support']:.0%}", "Lift": round(r["lift"], 2)} for r in matches]), hide_index=True, width="stretch")
-    if results:
-        st.markdown("### Der Zielkonflikt")
-        rel, div = feed_metrics(results), feed_metrics(diverse_results)
-        st.dataframe(pd.DataFrame([
-            {"Strategie": "Nur Relevanz", "Ø Konfidenz": f"{rel['confidence']:.0%}", "Perspektiv-Tags": rel["perspectives"], "Spannweite": f"{rel['spread']:.1f}"},
-            {"Strategie": "Mit Perspektivenvielfalt", "Ø Konfidenz": f"{div['confidence']:.0%}", "Perspektiv-Tags": div["perspectives"], "Spannweite": f"{div['spread']:.1f}"},
-        ]), hide_index=True, width="stretch")
-        decision = st.radio("Welche Strategie würdest du als Produktteam einsetzen?", [
-            "Nur Relevanz",
-            "Mit Perspektivenvielfalt",
-            "Noch keine Entscheidung — mir fehlen Messwerte"
-        ], index=None, key="product_decision")
-        if decision:
-            st.info("Wirtschaftsinformatik heißt hier: Ziele festlegen, Daten und Technik gestalten, Auswirkungen messen und Entscheidungen begründen. Für eine reale Entscheidung bräuchten wir zusätzlich Nutzungs-, Qualitäts- und Fairnessmetriken.")
-    if results:
-        st.markdown("### Wie einseitig ist dieser Ausschnitt?")
-        mean = sum(POST_BY_ID[r["target"]]["position"] for r in results) / len(results)
-        st.metric("Mittlere Modell-Position im Feed", f"{mean:+.2f}")
-        st.caption("−1 = stark links, +1 = stark rechts. Ungewichteter Mittelwert der fest vergebenen Tags, keine Messung deiner Haltung. Die Mitte kann sowohl mittige als auch gegensätzliche Posts bedeuten.")
-        distribution = Counter(POST_BY_ID[r["target"]]["label"] for r in results)
-        st.bar_chart(pd.Series({label: distribution[label] for label in POSITIONS.values()}, name="Empfohlene Posts"), color="#1d9bf0")
-    st.markdown("### Szenarienvergleich A ↔ B")
-    st.caption("Dies ist kein randomisierter A/B-Test. Speichere ein Simulationsszenario, ändere genau eine Annahme, erzeuge neu und lerne erneut. Test-Likes, Seed und Lernschwellen bleiben dabei gleich.")
-    if st.button("Szenario A merken", disabled=not results, width="stretch"):
+            st.dataframe(pd.DataFrame([{"Wenn ALLE": source_label(r), "Dann": r["target"], "Konfidenz": f'{r["confidence"]:.0%}',
+                                       "Support": f'{r["support"]:.0%}', "Lift": round(r["lift"], 2)} for r in matches]), hide_index=True, width="stretch")
+
+    decision = st.radio("Welche Einstellung würdest du für ein reales Produkt begründen?", [
+        "Stärker regelbasiert", "Stärker chronologisch", "Mehr Perspektivenvielfalt",
+        "Noch keine Entscheidung — mir fehlen Messwerte"
+    ], index=None, key="product_decision")
+    if decision:
+        st.info("Wirtschaftsinformatik heißt hier: Ziele festlegen, Daten und Technik gestalten, Auswirkungen messen und Entscheidungen begründen. Für ein reales Produkt bräuchten wir zusätzliche Qualitäts-, Nutzungs- und Fairnessmetriken.")
+
+    st.markdown("### Gestaltung A ↔ B vergleichen")
+    st.caption("Speichere den aktuellen Feed, ändere einen Regler und vergleiche dieselben Test-Likes direkt.")
+    if st.button("Gestaltung A merken", disabled=not entries, width="stretch"):
         st.session_state.comparison = {"settings": dataset["settings"], "dataset_id": dataset_id(dataset),
-                                       "support": model["support"], "confidence": model["confidence"],
-                                       "likes": list(selected), "feed": [r["target"] for r in results]}
-        st.success("Stand A ist für diese Sitzung gespeichert.")
+            "support": model["support"], "confidence": model["confidence"], "likes": list(selected),
+            "design": {"Regelanteil": rule_share, "Mindest-Lift": min_lift, "Perspektivenvielfalt": perspective},
+            "feed": [item["target"] for item in entries]}
+        st.success("Gestaltung A ist für diese Sitzung gespeichert.")
     saved = st.session_state.get("comparison")
     if saved:
-        if set(saved["likes"]) != set(selected) or (saved["support"], saved["confidence"]) != (model["support"], model["confidence"]):
-            st.warning("Test-Likes oder Lernschwellen unterscheiden sich von A. Unterschiede im Feed sind nicht allein auf den Datengenerator zurückzuführen.")
-        before, after = saved["feed"], [r["target"] for r in results]
+        after = [item["target"] for item in entries]
+        before = saved["feed"]
+        changed_inputs = set(saved["likes"]) != set(selected) or (saved["support"], saved["confidence"]) != (model["support"], model["confidence"])
+        if changed_inputs:
+            st.warning("Test-Likes oder Lernschwellen unterscheiden sich von A. Der Vergleich isoliert die Gestaltungsregler daher nicht mehr.")
         st.dataframe(pd.DataFrame({"Rang": range(1, max(len(before), len(after)) + 1),
-                                   "A · gespeichert": [post_label(pid) for pid in before] + ["—"] * max(0, len(after)-len(before)),
-                                   "B · aktuell": [post_label(pid) for pid in after] + ["—"] * max(0, len(before)-len(after))}), hide_index=True, width="stretch")
-        with st.expander("Einstellungen A und B vergleichen"):
-            labels = {"tendency": "Tendenz", "polarization": "Polarisierung", "similarity": "Ähnlichkeitsliebe", "activity": "Aktivität", "users": "Personen", "seed": "Seed"}
-            st.table(pd.DataFrame([{"Parameter": label, "A": saved["settings"][key], "B": dataset["settings"][key]} for key, label in labels.items()]))
-        st.download_button("↓  Experimentvergleich herunterladen", json.dumps({"A": saved, "B": {"settings": dataset["settings"], "dataset_id": dataset_id(dataset), "support": model["support"], "confidence": model["confidence"], "likes": selected, "feed": after}}, ensure_ascii=False, indent=2), "feedlab-vergleich.json", "application/json")
-    with st.expander("Drei Fragen für dein Experiment"):
-        st.write("1. Halte das Testprofil fest und verschiebe nur die Bevölkerung nach links oder rechts. Ändert sich der Feed?")
-        st.write("2. Setze die Vorliebe für ähnliche Positionen auf 0. Welche Muster bleiben durch Themeninteressen und Zufall trotzdem bestehen?")
-        st.write("3. Ändere nur den Seed. Welche scheinbar sicheren Regeln verschwinden? Was sagt das über eine kleine Stichprobe?")
-        st.caption("Wir simulieren eine einzige Empfehlungsrunde. Eine Filterblase über mehrere Runden oder eine Veränderung politischer Überzeugungen wird damit nicht nachgewiesen.")
-    code_panel(matching_rules, recommend, recommend_diverse)
-
+            "A · gespeichert": [post_label(pid) for pid in before] + ["—"] * max(0, len(after)-len(before)),
+            "B · aktuell": [post_label(pid) for pid in after] + ["—"] * max(0, len(before)-len(after))}), hide_index=True, width="stretch")
+        current_design = {"Regelanteil": rule_share, "Mindest-Lift": min_lift, "Perspektivenvielfalt": perspective}
+        st.table(pd.DataFrame([{"Regler": key, "A": value, "B": current_design[key]} for key, value in saved.get("design", current_design).items()]))
+    code_panel(matching_rules, recommend_diverse, compose_feed)
 
 def main():
     defaults()
