@@ -18,12 +18,12 @@ python -m venv .venv
 
 ## Lernpfad
 
-1. **Daten erzeugen:** Politische Tendenz, Polarisierung, Vorliebe für ähnliche Positionen und Aktivität verändern. Optional 50–1.000 Personen und einen Seed einstellen. Erst „Datensatz erzeugen“ übernimmt geänderte Regler und verwirft das alte Modell.
-2. **Likes verstehen:** Einzelne fiktive Personen mit Like-Chancen und tatsächlichen Zufallsergebnissen, alle Transaktionen, alle Post-Texte, die politische Verteilung und eine 0/1-Matrix ansehen. Datensatz als JSON oder Matrix als CSV herunterladen.
-3. **Regeln lernen:** Mindest-Support und Mindest-Konfidenz einstellen. Apriori findet häufige Post-Kombinationen; `association_rules()` erzeugt Regeln. Einzel- und Kombinationsregeln lassen sich untersuchen und nachrechnen.
-4. **Feed entdecken:** Ein linkes, mittiges, rechtes oder gemischtes **fiktives** Testprofil auswählen oder dessen Likes selbst zusammenstellen. Neue Posts mit konkreter Regelerklärung ansehen. Einen Stand als A speichern, die Daten verändern, erneut lernen und den Feed B vergleichen.
+1. **Mission:** Zwei Feeds für dasselbe fiktive Profil vergleichen, zunächst eine Vermutung abgeben und die Leitfrage entdecken: Warum verändert die Trainingscommunity den Feed?
+2. **Experiment:** Eine Hypothese wählen und zunächst nur eine Generatorannahme verändern. Einzelne Personen, Chancen, Transaktionen, Posts und die 0/1-Matrix liegen in einem optionalen Vertiefungstab.
+3. **Muster erklären:** Mindest-Support und Mindest-Konfidenz einstellen. Apriori findet häufige Post-Kombinationen; `association_rules()` erzeugt Regeln. Die Oberfläche erklärt zuerst „Wie häufig?“ und „Wie zuverlässig im Datensatz?“; Lift, Tabellen und Python-Code sind Vertiefungen.
+4. **Feed gestalten:** Als fiktives Produktteam „Nur Relevanz“ und „Mit Perspektivenvielfalt“ vergleichen, den Zielkonflikt anhand von Konfidenz, Zahl der Modell-Tags und Spannweite bewerten und eine begründete Produktentscheidung treffen. Ein Szenario lässt sich speichern und nach Änderung genau einer Annahme vergleichen.
 
-Alle Schritte zeigen den tatsächlich verwendeten Python-Code in einem aufklappbaren Bereich. Die Navigation bleibt auf schmalen Smartphone-Bildschirmen als 2×2-Auswahl bedienbar; breite Datentabellen sind horizontal scrollbar.
+Alle Schritte zeigen den tatsächlich verwendeten Python-Code in einem aufklappbaren Bereich. Die Navigation bleibt auf schmalen Smartphone-Bildschirmen als 2×2-Auswahl bedienbar; breite Datentabellen sind horizontal scrollbar. Für eine kurze Studienorientierung kann man Mission, eine Regel und die Produktentscheidung durchlaufen, ohne Matrix oder Code zu öffnen.
 
 ## Datendesign: viele Personen, derselbe Post-Katalog
 
@@ -76,9 +76,22 @@ Bei der Empfehlung müssen **alle Voraussetzungen** gewählt sein. Bereits gelik
 
 Es gibt keinen universell besten Regel-Rankingstandard. Die gewählte Maximum-Konfidenz-Baseline ist erklärbar, aber weder eine kalibrierte Wahrscheinlichkeit für die gesamte Auswahl noch eine Garantie gegen Fehlprognosen. Quellen: [mlxtend Apriori](https://rasbt.github.io/mlxtend/user_guide/frequent_patterns/apriori/), [mlxtend Assoziationsregeln](https://rasbt.github.io/mlxtend/user_guide/frequent_patterns/association_rules/), [Feremans & Goethals: Scalable Evaluation of Rule-Based Recommender Systems](https://adrem.uantwerpen.be/bibrem/pubs/rule-based.pdf).
 
+Die alternative Strategie „Mit Perspektivenvielfalt“ lernt kein zweites Modell. Sie verwendet denselben Kandidatenpool und wählt iterativ Posts nach `0,7 × Konfidenz + 0,3 × Perspektivabstand`. Der Abstand ist die kleinste normierte Distanz des politischen Modell-Tags zu bereits ausgewählten Posts. Die Gewichtung 70/30 ist sichtbar, bewusst diskutierbar und nicht aus Daten geschätzt. Sie kann die durchschnittliche Konfidenz senken und garantiert weder faire Repräsentation noch tatsächliche Meinungsvielfalt.
+
+## Bezug zur Wirtschaftsinformatik
+
+Das Lab stellt nicht nur die Frage „Wie funktioniert Apriori?“, sondern „Welches Ziel soll ein digitales Produkt verfolgen?“ Studierende erleben vier typische Perspektiven der Wirtschaftsinformatik:
+
+- **Daten:** Welche Beobachtungen und Annahmen bilden unsere Wirklichkeit ab?
+- **Technik:** Wie werden aus Transaktionen Regeln und Empfehlungen?
+- **Produkt und Organisation:** Welche Kennzahl optimiert die Plattform und wer entscheidet darüber?
+- **Wirkung und Verantwortung:** Welche Nebenfolgen, Messlücken und Zielkonflikte entstehen?
+
+Die abschließende Produktentscheidung hat absichtlich keine Musterlösung. Für eine reale Entscheidung wären zusätzliche Nutzungs-, Qualitäts-, Fairness- und Geschäftsmetriken nötig. Genau diese Verbindung von Mensch, Aufgabe, Organisation und IT ist der Studienorientierungsbezug.
+
 ## Experimente für Studierende
 
-**A. Gleiches Profil, andere Bevölkerung:** Stand A speichern, nur die Tendenz ändern, Daten erzeugen und neu lernen. Gleiches Testprofil, gleiche Schwellen, gleicher Seed. Welche Posts wechseln?
+**A. Gleiches Profil, andere Bevölkerung:** Szenario A speichern, nur die Tendenz ändern, Daten erzeugen und neu lernen. Gleiches Testprofil, gleiche Schwellen, gleicher Seed. Welche Posts wechseln? Dies ist ein kontrollierter Szenarienvergleich, kein randomisierter A/B-Test mit realen Nutzern.
 
 **B. Ohne politische Nähe:** Ähnlichkeitsliebe auf 0 stellen. Themeninteressen können weiterhin Regeln erzeugen. Ein verbliebener politisch markierter Treffer beweist deshalb keine politische Ursache.
 

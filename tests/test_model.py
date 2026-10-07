@@ -1,5 +1,5 @@
 import pytest
-from feedlab.model import encode, train, recommend
+from feedlab.model import encode, train, recommend, recommend_diverse
 from feedlab.synthetic import Settings, generate, transactions
 
 
@@ -76,3 +76,18 @@ def test_support_tiebreak_deduplication_and_no_artificial_boost():
     assert recommend(["A", "B"], [rare, single, rare]) == [single, rare]
     equivalent = {**single, "source": ["A", "B"]}
     assert recommend(["A", "B"], [equivalent, single]) == [single]
+
+
+def test_perspective_strategy_uses_same_candidates_but_changes_order():
+    rules = [
+        dict(source=["A"], target="B", confidence=.90, support=.4, lift=2),
+        dict(source=["A"], target="C", confidence=.88, support=.4, lift=2),
+        dict(source=["A"], target="D", confidence=.75, support=.3, lift=2),
+    ]
+    positions = {"B": -1.0, "C": -.5, "D": 1.0}
+    relevant = recommend(["A"], rules)
+    diverse = recommend_diverse(["A"], rules, positions)
+    assert relevant == [rules[0], rules[1], rules[2]]
+    assert diverse[0] == rules[0]
+    assert diverse[1] == rules[2]
+    assert {r["target"] for r in diverse} == {r["target"] for r in relevant}

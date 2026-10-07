@@ -62,3 +62,34 @@ def recommend(likes, rules):
     for rule in matching_rules(likes, rules):
         best.setdefault(rule["target"], rule)
     return list(best.values())[:6]
+
+
+def recommend_diverse(likes, rules, positions, limit=6, relevance_weight=0.7):
+    """Greedy Neuordnung: Regelstärke plus Abstand zu bereits gewählten Positionen.
+
+    Die Regeln und Kandidaten bleiben gleich. Nur die Rangfolge ändert sich.
+    relevance_weight=0.7 ist eine transparente Produktentscheidung, kein Lernwert.
+    """
+    candidates = []
+    seen_targets = set()
+    for rule in matching_rules(likes, rules):
+        if rule["target"] not in seen_targets:
+            candidates.append(rule)
+            seen_targets.add(rule["target"])
+    selected = []
+    while candidates and len(selected) < limit:
+        def score(rule):
+            if not selected:
+                perspective_gain = 0
+            else:
+                perspective_gain = min(
+                    abs(positions[rule["target"]] - positions[item["target"]]) / 2
+                    for item in selected
+                )
+            return (relevance_weight * rule["confidence"]
+                    + (1 - relevance_weight) * perspective_gain,
+                    rule["support"], rule["lift"])
+        winner = max(candidates, key=score)
+        selected.append(winner)
+        candidates.remove(winner)
+    return selected

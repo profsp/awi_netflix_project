@@ -9,7 +9,8 @@ import pandas as pd
 import streamlit as st
 
 from feedlab.catalog import CATALOG, POSTS, POST_BY_ID, POSITIONS, PROFILES, post_label
-from feedlab.model import encode, train, recommend, matching_rules, antecedents, source_label
+from feedlab.model import (encode, train, recommend, recommend_diverse,
+                           matching_rules, antecedents, source_label)
 from feedlab.synthetic import Settings, generate, transactions, dataset_id
 
 st.set_page_config(page_title="FeedLab · Wer formt deinen Feed?", page_icon="✕", layout="centered",
@@ -51,7 +52,7 @@ p{line-height:1.6}button{touch-action:manipulation}
 .post-text{font-size:.95rem}.post{padding:17px 2px}}
 </style>""")
 
-STEPS = ["◉  Daten erzeugen", "▦  Likes verstehen", "⌘  Regeln lernen", "✦  Feed entdecken"]
+STEPS = ["◉  Mission", "▦  Experiment", "⌘  Muster erklären", "✦  Feed gestalten"]
 
 
 def go(step):
@@ -75,7 +76,8 @@ def defaults():
 
 def post_card(post_id, counts=None, rule=None):
     post = POST_BY_ID[post_id]
-    count = (counts or {}).get(post_id, 0)
+    count = counts.get(post_id, 0) if counts is not None else None
+    like_meta = f"♡ {count} synthetische Likes" if count is not None else "✦ Feed-Kandidat"
     explanation = ""
     if rule:
         names = " UND ".join(post_label(pid) for pid in antecedents(rule))
@@ -88,7 +90,7 @@ def post_card(post_id, counts=None, rule=None):
             f'<div class="post-handle">@{post["handle"]} · fiktiver Account</div></div></div>'
             f'<div class="post-text">{escape(post["text"])}</div>'
             f'<span class="tag">#{post["topic"]}</span><span class="tag">{post["label"]} · Modell-Tag</span>'
-            f'<div class="post-meta"><span>♡ {count} synthetische Likes</span><span>{post_id} · Simulation</span></div>'
+            f'<div class="post-meta"><span>{like_meta}</span><span>{post_id} · Simulation</span></div>'
             f'{explanation}</article>')
 
 
@@ -99,9 +101,55 @@ def code_panel(*functions):
             st.code(inspect.getsource(function), language="python")
 
 
+@st.cache_data
+def opening_comparison():
+    likes = list(PROFILES["Linkes Testprofil"])
+    scenarios = []
+    for title, tendency in [("Community A", -70), ("Community B", 70)]:
+        dataset = generate(Settings(tendency=tendency, seed=42))
+        rules = train(transactions(dataset), .08, .55)
+        scenarios.append({"title": title, "tendency": tendency,
+                          "feed": [rule["target"] for rule in recommend(likes, rules)]})
+    return likes, scenarios
+
+
+def mission_page():
+    likes, scenarios = opening_comparison()
+    st.markdown("## Gleiche Likes. Anderer Feed.")
+    st.write("Du arbeitest im Produktteam einer Social-Media-Plattform. Ein fiktives Profil hat in beiden Szenarien exakt dieselben Posts gelikt:")
+    st.write(" · ".join(post_label(pid) for pid in likes))
+    choice = st.radio("Was erwartest du?", ["Beide Feeds sind gleich", "Die Feeds unterscheiden sich"],
+                      index=None, key="opening_prediction")
+    if st.button("Feeds vergleichen", type="primary", width="stretch"):
+        st.session_state.opening_revealed = True
+    if st.session_state.get("opening_revealed"):
+        if choice is None:
+            st.caption("Du kannst zuerst eine Vermutung wählen — der Vergleich ist trotzdem sichtbar.")
+        elif choice == "Die Feeds unterscheiden sich":
+            st.success("Deine Vermutung passt zu diesem Simulationslauf.")
+        else:
+            st.info("Überraschung: Die Likes des Profils sind gleich, aber die gelernten Umgebungen unterscheiden sich.")
+        tabs = st.tabs([scenario["title"] for scenario in scenarios])
+        for tab, scenario in zip(tabs, scenarios):
+            with tab:
+                st.caption(f"Politische Tendenz der fiktiven Trainingscommunity: {scenario['tendency']:+d}")
+                for pid in scenario["feed"]:
+                    post_card(pid)
+        st.markdown("### Deine Mission")
+        st.write("Finde heraus, **warum** derselbe Ausgangspunkt zu anderen Empfehlungen führt. Entscheide danach, ob deine Plattform nur geschätzte Relevanz oder zusätzlich Perspektivenvielfalt berücksichtigen soll.")
+        st.button("Mission starten →", on_click=go, args=(1,), type="primary", width="stretch")
+    else:
+        st.caption("Die Daten sind vollständig synthetisch. Deine Auswahl wird nicht gespeichert und sagt nichts über deine politische Haltung aus.")
+
+
 def generator_page():
-    st.markdown("## Deine Daten. Deine Annahmen.")
-    st.write("Simuliere eine Bevölkerung, die 20 politische Posts sieht. Jede Person hinterlässt eine eigene Sammlung von Likes.")
+    st.markdown("## Verändere genau eine Annahme.")
+    st.write("Simuliere eine Bevölkerung, die 20 politische Posts sieht. Für einen sauberen Vergleich lässt du Seed, Testprofil und Lernschwellen gleich und veränderst zunächst nur die politische Tendenz.")
+    st.radio("Deine Vorhersage vor dem Experiment", [
+        "Der Feed verschiebt sich in Richtung der Community",
+        "Der Feed bleibt weitgehend gleich",
+        "Ich bin unsicher"
+    ], index=None, key="experiment_hypothesis")
     st.slider("Politische Tendenz der Bevölkerung", -100, 100, key="gen_tendency",
               help="Verschiebt das Zentrum der erzeugten Positionen. −100 = stark links, +100 = stark rechts. Kein Wert über dich.")
     st.html('<div class="spectrum"></div><div class="spectrum-labels"><span>−100 · stark links</span><span>0 · Mitte</span><span>+100 · stark rechts</span></div>')
@@ -131,11 +179,11 @@ def generator_page():
         st.write("Eine Person mit vielen Posts liefert nur eine Transaktion. Um gemeinsame Vorlieben zu erkennen, brauchen wir viele unabhängige Like-Sammlungen. Deshalb sieht jede fiktive Person denselben festen Katalog: 4 Themen × 5 Positionen = 20 Posts.")
         st.write("Politische Nähe, persönliche Themeninteressen, Aktivität und Zufall bestimmen die Like-Chance. Die Regler sind Annahmen unserer Simulation, keine Messwerte über X. Nicht-Likes werden nicht als politische Ablehnung interpretiert.")
     code_panel(generate)
-    st.button("Weiter: Likes verstehen →", on_click=go, args=(1,), width="stretch")
 
 
-def data_page(dataset, counts):
-    st.markdown("## Ein Like ist noch kein Muster.")
+def data_page(dataset, counts, embedded=False):
+    if not embedded:
+        st.markdown("## Ein Like ist noch kein Muster.")
     st.write("**1 Transaktion = 1 fiktive Person.** Die Items sind die IDs ihrer gelikten Posts. Politische Tags erklären die Simulation; das Lernverfahren sieht ausschließlich Post-Likes.")
     tab_people, tab_posts, tab_matrix = st.tabs(["Personen", "Posts", "0/1-Matrix"])
     with tab_people:
@@ -166,11 +214,12 @@ def data_page(dataset, counts):
         st.download_button("↓  Matrix als CSV", frame.to_csv().encode("utf-8-sig"), "feedlab-matrix.csv", "text/csv")
     st.download_button("↓  Gesamten synthetischen Datensatz herunterladen", json.dumps(dataset, ensure_ascii=False, indent=2), "feedlab-daten.json", "application/json")
     code_panel(encode)
-    st.button("Weiter: Regeln lernen →", on_click=go, args=(2,), width="stretch")
+    if not embedded:
+        st.button("Weiter: Regeln lernen →", on_click=go, args=(2,), width="stretch")
 
 
 def rules_page(dataset):
-    st.markdown("## Aus Likes werden Regeln.")
+    st.markdown("## Warum verändert sich der Feed?")
     st.write("**[P01 UND P06] → P11** heißt: Personen, die beide Posts links liken, liken häufig auch den Post rechts. Das ist ein beobachteter Zusammenhang in unseren künstlichen Daten.")
     support = st.slider("Mindest-Support", 1, 50, format="%d %%", key="support")
     st.caption("Wie viel Prozent aller simulierten Personen haben sämtliche Posts einer Regel gelikt?")
@@ -202,13 +251,13 @@ def rules_page(dataset):
             st.markdown(f"### [{source_label(rule)}] → {rule['target']}")
             st.write("**Wenn:** " + " UND ".join(post_label(pid) for pid in antecedents(rule)))
             st.write("**Dann:** " + post_label(rule["target"]))
-            a, b, c = st.columns(3)
-            a.metric("Support", f"{rule['support']:.0%}")
-            b.metric("Konfidenz", f"{rule['confidence']:.0%}")
-            c.metric("Lift", f"{rule['lift']:.2f}×")
+            a, b = st.columns(2)
+            a.metric("Wie häufig?", f"{rule['support']:.0%}")
+            b.metric("Wie zuverlässig im Datensatz?", f"{rule['confidence']:.0%}")
             st.write(f"**{rule['together']} von {rule['total']}** Personen liken alle Posts dieser Regel. **{rule['together']} von {rule['source_count']}** Personen mit den Likes links liken auch den Zielpost.")
-            st.caption("Lift = Konfidenz / allgemeiner Like-Anteil des Zielposts. Über 1 bedeutet: häufiger als ohne Kenntnis der Voraussetzungen zu erwarten. Das ist keine Ursache-Wirkungs-Aussage.")
-            with st.expander("Regeltabelle ansehen"):
+            with st.expander("Vertiefung: Lift und Regeltabelle"):
+                st.metric("Lift", f"{rule['lift']:.2f}×")
+                st.caption("Lift = Konfidenz / allgemeiner Like-Anteil des Zielposts. Über 1 bedeutet: häufiger als ohne Kenntnis der Voraussetzungen zu erwarten. Das ist keine Ursache-Wirkungs-Aussage.")
                 st.dataframe(pd.DataFrame([{"Wenn ALLE": source_label(r), "Dann": r["target"], "Support": round(r["support"], 3),
                                            "Konfidenz": round(r["confidence"], 3), "Lift": round(r["lift"], 2)} for r in filtered]), hide_index=True, width="stretch")
         else:
@@ -218,7 +267,7 @@ def rules_page(dataset):
         st.write("Apriori sieht nur die 0/1-Likes. Texte, politische Positionen und Themen gehen nicht als Merkmale ins Training ein. Gleichgerichtete Empfehlungen können trotzdem entstehen, weil wir entsprechende Like-Muster in den Generator eingebaut haben.")
         st.write("Das ist nicht der echte X-Algorithmus. Keine Aussage über tatsächliche politische Bündnisse oder das Verhalten realer Menschen. Konfidenz im Training ist keine auf neuen Personen gemessene Trefferquote.")
     code_panel(train)
-    st.button("Weiter: Feed entdecken →", on_click=go, args=(3,), width="stretch")
+    st.button("Weiter: Plattform gestalten →", on_click=go, args=(3,), width="stretch")
 
 
 def select_profile():
@@ -230,9 +279,20 @@ def custom_profile():
     st.session_state.profile = "Eigenes fiktives Profil"
 
 
+def feed_metrics(results):
+    if not results:
+        return {"confidence": 0, "perspectives": 0, "spread": 0}
+    positions = [POST_BY_ID[rule["target"]]["position"] for rule in results]
+    return {
+        "confidence": sum(rule["confidence"] for rule in results) / len(results),
+        "perspectives": len({POST_BY_ID[rule["target"]]["label"] for rule in results}),
+        "spread": max(positions) - min(positions),
+    }
+
+
 def feed_page(dataset, counts):
-    st.markdown("## Für dich. Oder für dein Muster?")
-    st.write("Gib einem **fiktiven Testprofil** ein paar Likes. Welche Posts landen anschließend in seinem Feed?")
+    st.markdown("## Du entscheidest, was der Feed optimiert.")
+    st.write("Du bist jetzt im Produktteam. Soll die Plattform nur die stärksten gelernten Regeln nutzen — oder bewusst unterschiedliche Modell-Perspektiven in die Rangfolge einbeziehen?")
     st.selectbox("Testprofil", list(PROFILES) + ["Eigenes fiktives Profil"], key="profile", on_change=select_profile)
     selected = st.multiselect("Bisherige Likes des Testprofils", CATALOG, format_func=post_label, key="feed_likes", on_change=custom_profile)
     st.caption("Das sind Rollen im Experiment, keine Frage nach deiner politischen Haltung. Diese Auswahl verändert die Trainingsdaten nicht.")
@@ -248,22 +308,44 @@ def feed_page(dataset, counts):
         return
     matches = matching_rules(selected, model["rules"])
     results = recommend(selected, model["rules"])
+    positions = {pid: POST_BY_ID[pid]["position"] for pid in CATALOG}
+    diverse_results = recommend_diverse(selected, model["rules"], positions)
     st.caption(f"{len(matches)} passende Regeln · davon {sum(len(antecedents(r)) > 1 for r in matches)} Kombinationsregeln · maximal 6 neue Posts")
-    feed_tab, why_tab = st.tabs(["Für das Testprofil", "Regelanwendung"])
-    with feed_tab:
+    relevance_tab, diversity_tab, why_tab = st.tabs(["Nur Relevanz", "Mit Perspektivenvielfalt", "So entscheidet das System"])
+    with relevance_tab:
         if not selected:
             st.info("Wähle mindestens einen Like für das Testprofil.")
         elif not results:
             st.info("Keine passende Empfehlung mit Lift über 1. Andere fiktive Likes oder andere Trainingsschwellen können das ändern.")
         for rule in results:
             post_card(rule["target"], counts, rule)
+    with diversity_tab:
+        st.caption("Dieselben Regelkandidaten, andere Rangfolge: 70 % Konfidenz + 30 % Abstand zu bereits ausgewählten Modell-Positionen.")
+        if not diverse_results:
+            st.info("Keine passenden Kandidaten für dieses Testprofil.")
+        for rule in diverse_results:
+            post_card(rule["target"], counts, rule)
     with why_tab:
-        st.write("**1. Abgleichen:** Alle Likes links müssen gewählt sein (UND). Weitere Likes sind erlaubt. Bereits gelikte Zielposts werden ausgeschlossen.")
-        st.write("**2. Sortieren:** Nur Lift > 1. Konfidenz zuerst, dann Support und Lift. Bei gleichen Kennzahlen wird die kürzere Regel angezeigt. Längere Regeln bekommen keinen Bonus.")
-        st.write("**3. Auswählen:** Pro Zielpost zählt nur die bestplatzierte Regel. Überlappende Regeln werden nicht addiert. Die Auswahl ist eine erklärbare Baseline, keine optimale oder fehlerfreie Vorhersage.")
+        st.write("**Gemeinsamer Kandidatenpool:** Alle Likes links müssen gewählt sein (UND). Bereits gelikte Zielposts und Regeln mit Lift ≤ 1 werden ausgeschlossen.")
+        st.write("**Nur Relevanz:** Konfidenz zuerst, danach Support und Lift. Pro Zielpost zählt die bestplatzierte Regel.")
+        st.write("**Mit Perspektivenvielfalt:** Das Lab kombiniert 70 % Konfidenz mit 30 % Abstand zu bereits ausgewählten politischen Modell-Tags. Diese Gewichtung ist eine Produktentscheidung, kein von den Daten gelernter Wert.")
         if matches:
             st.dataframe(pd.DataFrame([{"Wenn ALLE": source_label(r), "Dann": r["target"], "Konfidenz": f"{r['confidence']:.0%}",
                                        "Support": f"{r['support']:.0%}", "Lift": round(r["lift"], 2)} for r in matches]), hide_index=True, width="stretch")
+    if results:
+        st.markdown("### Der Zielkonflikt")
+        rel, div = feed_metrics(results), feed_metrics(diverse_results)
+        st.dataframe(pd.DataFrame([
+            {"Strategie": "Nur Relevanz", "Ø Konfidenz": f"{rel['confidence']:.0%}", "Perspektiv-Tags": rel["perspectives"], "Spannweite": f"{rel['spread']:.1f}"},
+            {"Strategie": "Mit Perspektivenvielfalt", "Ø Konfidenz": f"{div['confidence']:.0%}", "Perspektiv-Tags": div["perspectives"], "Spannweite": f"{div['spread']:.1f}"},
+        ]), hide_index=True, width="stretch")
+        decision = st.radio("Welche Strategie würdest du als Produktteam einsetzen?", [
+            "Nur Relevanz",
+            "Mit Perspektivenvielfalt",
+            "Noch keine Entscheidung — mir fehlen Messwerte"
+        ], index=None, key="product_decision")
+        if decision:
+            st.info("Wirtschaftsinformatik heißt hier: Ziele festlegen, Daten und Technik gestalten, Auswirkungen messen und Entscheidungen begründen. Für eine reale Entscheidung bräuchten wir zusätzlich Nutzungs-, Qualitäts- und Fairnessmetriken.")
     if results:
         st.markdown("### Wie einseitig ist dieser Ausschnitt?")
         mean = sum(POST_BY_ID[r["target"]]["position"] for r in results) / len(results)
@@ -271,9 +353,9 @@ def feed_page(dataset, counts):
         st.caption("−1 = stark links, +1 = stark rechts. Ungewichteter Mittelwert der fest vergebenen Tags, keine Messung deiner Haltung. Die Mitte kann sowohl mittige als auch gegensätzliche Posts bedeuten.")
         distribution = Counter(POST_BY_ID[r["target"]]["label"] for r in results)
         st.bar_chart(pd.Series({label: distribution[label] for label in POSITIONS.values()}, name="Empfohlene Posts"), color="#1d9bf0")
-    st.markdown("### Experiment A ↔ B")
-    st.caption("Speichere diesen Stand. Ändere dann einen Datenregler, erzeuge neu und lerne erneut. Für einen fairen Vergleich dieselben Test-Likes und Lernschwellen verwenden.")
-    if st.button("Stand als Vergleich A merken", disabled=not results, width="stretch"):
+    st.markdown("### Szenarienvergleich A ↔ B")
+    st.caption("Dies ist kein randomisierter A/B-Test. Speichere ein Simulationsszenario, ändere genau eine Annahme, erzeuge neu und lerne erneut. Test-Likes, Seed und Lernschwellen bleiben dabei gleich.")
+    if st.button("Szenario A merken", disabled=not results, width="stretch"):
         st.session_state.comparison = {"settings": dataset["settings"], "dataset_id": dataset_id(dataset),
                                        "support": model["support"], "confidence": model["confidence"],
                                        "likes": list(selected), "feed": [r["target"] for r in results]}
@@ -295,14 +377,14 @@ def feed_page(dataset, counts):
         st.write("2. Setze die Vorliebe für ähnliche Positionen auf 0. Welche Muster bleiben durch Themeninteressen und Zufall trotzdem bestehen?")
         st.write("3. Ändere nur den Seed. Welche scheinbar sicheren Regeln verschwinden? Was sagt das über eine kleine Stichprobe?")
         st.caption("Wir simulieren eine einzige Empfehlungsrunde. Eine Filterblase über mehrere Runden oder eine Veränderung politischer Überzeugungen wird damit nicht nachgewiesen.")
-    code_panel(matching_rules, recommend)
+    code_panel(matching_rules, recommend, recommend_diverse)
 
 
 def main():
     defaults()
     st.html('<div class="topbar"><div class="brand"><b>✕</b>Feed<span>Lab</span></div><div class="lab-label">SOCIAL ALGORITHM LAB</div></div>')
     if st.session_state.step == 0:
-        st.html('<div class="kicker">Ein Experiment. Kein echter Feed.</div><h1>Wer formt<br>deinen <span class="blue">Feed?</span></h1><div class="hero-sub">Erzeuge eine fiktive Community. Entdecke ihre Like-Muster. Und sieh, wie daraus politische Empfehlungen werden.</div>')
+        st.html('<div class="kicker">Deine Mission im Produktteam</div><h1>Gleiche Likes.<br>Anderer <span class="blue">Feed?</span></h1><div class="hero-sub">Ein Empfehlungssystem ist nicht nur Code. Daten, Ziele und Produktentscheidungen bestimmen, was Menschen sehen.</div>')
     else:
         st.html('<div class="kicker">Dein Experiment · 100 % synthetisch</div>')
     dataset = st.session_state.dataset
@@ -322,9 +404,14 @@ def main():
     st.caption(f"Schritt {st.session_state.step + 1} von 4 · Datensatz {dataset_id(dataset)} · Seed {dataset['settings']['seed']}")
     st.divider()
     if st.session_state.step == 0:
-        generator_page()
+        mission_page()
     elif st.session_state.step == 1:
-        data_page(dataset, counts)
+        experiment_tab, data_tab = st.tabs(["Experiment steuern", "Vertiefung: Daten ansehen"])
+        with experiment_tab:
+            generator_page()
+        with data_tab:
+            data_page(dataset, counts, embedded=True)
+        st.button("Weiter: Muster erklären →", on_click=go, args=(2,), type="primary", width="stretch")
     elif st.session_state.step == 2:
         rules_page(dataset)
     else:

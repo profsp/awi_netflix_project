@@ -14,20 +14,26 @@ def test_entire_path_and_session_persistence():
     app = AppTest.from_file(APP, default_timeout=15).run()
     assert not app.exception
     assert len(app.session_state["dataset"]["users"]) == 300
-    click(app, "▦  Likes verstehen")
+    app.radio(key="opening_prediction").set_value("Die Feeds unterscheiden sich").run()
+    click(app, "Feeds vergleichen")
+    assert app.session_state["opening_revealed"]
+    click(app, "Mission starten →")
     assert len(app.dataframe) == 3
-    click(app, "⌘  Regeln lernen")
-    assert len(app.slider) == 2
+    click(app, "⌘  Muster erklären")
+    assert len(app.slider) == 2  # technische Lernschwellen erst in Schritt 3
     app.slider(key="support").set_value(9).run()
     click(app, "⌘  Regeln mit Apriori lernen")
     assert app.session_state["model"]["rules"]
-    click(app, "✦  Feed entdecken")
+    click(app, "✦  Feed gestalten")
     assert app.multiselect[0].value == ["P02", "P07"]
+    assert {tab.label for tab in app.tabs} >= {"Nur Relevanz", "Mit Perspektivenvielfalt", "So entscheidet das System"}
+    app.radio(key="product_decision").set_value("Mit Perspektivenvielfalt").run()
+    assert any("Wirtschaftsinformatik" in info.value for info in app.info)
     app.selectbox(key="profile").set_value("Rechtes Testprofil").run()
     assert app.multiselect[0].value == ["P04", "P09"]
-    click(app, "Stand als Vergleich A merken")
+    click(app, "Szenario A merken")
     saved = app.session_state["comparison"]
-    click(app, "◉  Daten erzeugen")
+    click(app, "▦  Experiment")
     app.slider(key="gen_tendency").set_value(30).run()
     assert app.session_state["dataset"]["settings"]["tendency"] == 0
     assert app.session_state["model"] is not None
@@ -35,38 +41,39 @@ def test_entire_path_and_session_persistence():
     assert app.session_state["dataset"]["settings"]["tendency"] == 30
     assert app.session_state["model"] is None
     assert app.session_state["comparison"] == saved
-    click(app, "⌘  Regeln lernen")
+    click(app, "⌘  Muster erklären")
     assert app.slider(key="support").value == 9
     click(app, "⌘  Regeln mit Apriori lernen")
-    click(app, "✦  Feed entdecken")
+    click(app, "✦  Feed gestalten")
     assert app.multiselect[0].value == ["P04", "P09"]
     assert len(app.dataframe) >= 2
     app.multiselect[0].set_value(["P01"]).run()
     assert app.selectbox(key="profile").value == "Eigenes fiktives Profil"
     assert any("unterscheiden" in warning.value for warning in app.warning)
-    click(app, "◉  Daten erzeugen")
+    click(app, "▦  Experiment")
     assert app.slider(key="gen_tendency").value == 30
 
 
 def test_sessions_are_isolated_and_no_model_feed_is_explained():
     first = AppTest.from_file(APP).run()
     second = AppTest.from_file(APP).run()
+    click(first, "▦  Experiment")
     first.slider(key="gen_tendency").set_value(-80).run()
     click(first, "↻  Datensatz erzeugen")
     assert second.session_state["dataset"]["settings"]["tendency"] == 0
-    click(second, "✦  Feed entdecken")
+    click(second, "✦  Feed gestalten")
     assert any("Zuerst" in info.value for info in second.info)
     assert not second.text_input
 
 
 def test_no_rules_and_empty_profile_are_valid_outcomes():
     app = AppTest.from_file(APP).run()
-    click(app, "⌘  Regeln lernen")
+    click(app, "⌘  Muster erklären")
     app.slider(key="support").set_value(50)
     app.slider(key="confidence").set_value(100).run()
     click(app, "⌘  Regeln mit Apriori lernen")
     assert app.session_state["model"]["rules"] == []
-    click(app, "✦  Feed entdecken")
+    click(app, "✦  Feed gestalten")
     assert any("Keine passende Empfehlung" in info.value for info in app.info)
     app.multiselect[0].set_value([]).run()
     assert not app.exception
