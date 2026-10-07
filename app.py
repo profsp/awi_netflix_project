@@ -5,6 +5,7 @@ from collections import Counter
 from dataclasses import asdict
 from html import escape
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -339,6 +340,25 @@ def feed_page(dataset, counts):
     entries = compose_feed(selected, model["rules"], positions, recency,
                            rule_share / 100, perspective / 100, min_lift)
     metrics = feed_metrics(entries)
+
+    st.markdown("### So verändert sich die politische Verteilung")
+    category_order = list(POSITIONS.values())
+    distribution = Counter(POST_BY_ID[item["target"]]["label"] for item in entries)
+    chart_data = pd.DataFrame({
+        "Kategorie": category_order,
+        "Posts": [distribution[label] for label in category_order],
+    })
+    chart = alt.Chart(chart_data).mark_bar(color="#1d9bf0", cornerRadiusTopLeft=4,
+                                           cornerRadiusTopRight=4).encode(
+        x=alt.X("Kategorie:N", sort=category_order,
+                axis=alt.Axis(title=None, labelAngle=-25)),
+        y=alt.Y("Posts:Q", axis=alt.Axis(title="Anzahl Posts", tickMinStep=1),
+                scale=alt.Scale(domainMin=0)),
+        tooltip=[alt.Tooltip("Kategorie:N"), alt.Tooltip("Posts:Q", format=".0f")],
+    ).properties(height=250)
+    st.altair_chart(chart, width="stretch")
+    st.caption("Feste Reihenfolge: stark links → eher links → Mitte → eher rechts → stark rechts. Verschiebe einen Regler und beobachte die Balken direkt.")
+
     a, b, c = st.columns(3)
     a.metric("Regelposts", metrics["rules"])
     b.metric("Chronikposts", metrics["chronology"])
@@ -355,11 +375,8 @@ def feed_page(dataset, counts):
             minutes = POST_BY_ID[item["target"]]["minutes_ago"]
             post_card(item["target"], counts, note=f"Platz {rank} · Chronik: vor {minutes} Minuten veröffentlicht · ohne Assoziationsregel")
 
-    st.markdown("### Politische Modell-Tags im Feed")
-    distribution = Counter(POST_BY_ID[item["target"]]["label"] for item in entries)
-    st.bar_chart(pd.Series({label: distribution[label] for label in POSITIONS.values()}, name="Posts"), color="#1d9bf0")
     st.metric("Mittlere Modell-Position", f'{metrics["mean"]:+.2f}')
-    st.caption("−1 = stark links, +1 = stark rechts. Verändere einen Regler und beobachte Feed und Balken direkt. Die Tags sind didaktische Setzungen, keine Messung deiner Haltung.")
+    st.caption("−1 = stark links, +1 = stark rechts. Die Tags sind didaktische Setzungen, keine Messung deiner Haltung.")
 
     with st.expander("So berechnet das System den Feed"):
         st.write("**Regelanteil:** Reserviert von sechs Plätzen den gewählten Anteil für passende Assoziationsregeln. Fehlen genügend Regelkandidaten, füllt die Chronik auf.")
