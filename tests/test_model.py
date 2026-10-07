@@ -1,5 +1,6 @@
 import pytest
-from serieslab.model import encode, train, recommend, demo_data
+from feedlab.model import encode, train, recommend
+from feedlab.synthetic import Settings, generate, transactions
 
 
 def test_exact_metrics_and_direction():
@@ -24,10 +25,10 @@ def test_empty_duplicates_thresholds_and_encoding():
 
 
 def test_recommendations_exclude_known_and_nonpositive_rules():
-    rules = train(demo_data())
-    result = recommend(["Stranger Things"], rules)
+    rules = train(transactions(generate(Settings())), .08, .55)
+    result = recommend(["P02", "P07"], rules)
     assert result
-    assert all(r["target"] != "Stranger Things" and r["lift"] > 1 for r in result)
+    assert all(r["target"] not in ["P02", "P07"] and r["lift"] > 1 for r in result)
     assert len({r["target"] for r in result}) == len(result)
     assert recommend(["Unknown"], rules) == []
     assert recommend(["A"], train([["A", "B"], ["A", "B"]])) == []
@@ -48,13 +49,13 @@ def test_combination_metrics_and_all_antecedents_required():
 
 
 def test_catalog_and_demo_consistency():
-    from serieslab.model import CATALOG
+    from feedlab.catalog import CATALOG
     assert len(CATALOG) == len(set(CATALOG)) == 20
-    assert all(set(row).issubset(CATALOG) for row in demo_data())
+    assert all(set(row).issubset(CATALOG) for row in transactions(generate(Settings())))
 
 
 def test_confidence_over_length_and_all_matching_rules_remain_visible():
-    from serieslab.model import matching_rules
+    from feedlab.model import matching_rules
     single = dict(source=["A"], target="C", lift=4, confidence=.9, support=.3)
     pair = dict(source=["A", "B"], target="C", lift=2, confidence=.8, support=.2)
     triple = dict(source=["A", "B", "D"], target="C", lift=1.5, confidence=.7, support=.1)

@@ -5,90 +5,69 @@ APP = str(Path(__file__).resolve().parents[1] / "app.py")
 
 
 def click(app, label):
-    next(button for button in app.button if button.label == label).click().run()
+    next(button for button in app.button if button.label == label).click().run(timeout=15)
     assert not app.exception
     assert not app.error
 
 
-def test_demo_from_data_to_prediction():
-    app = AppTest.from_file(APP).run()
+def test_entire_path_and_session_persistence():
+    app = AppTest.from_file(APP, default_timeout=15).run()
     assert not app.exception
-    assert not app.error
-    click(app, "▦ Daten verstehen")
-    assert len(app.dataframe) == 1
-    click(app, "✳ Regeln lernen")
+    assert len(app.session_state["dataset"]["users"]) == 300
+    click(app, "▦  Likes verstehen")
+    assert len(app.dataframe) == 3
+    click(app, "⌘  Regeln lernen")
     assert len(app.slider) == 2
-    click(app, "✳ Modell lernen")
-    assert app.session_state["demo_model"]["rules"]
-    click(app, "✧ Serien empfehlen")
-    app.multiselect[0].select("Stranger Things").run()
-    assert not app.error
+    app.slider(key="support").set_value(9).run()
+    click(app, "⌘  Regeln mit Apriori lernen")
+    assert app.session_state["model"]["rules"]
+    click(app, "✦  Feed entdecken")
+    assert app.multiselect[0].value == ["P02", "P07"]
+    app.selectbox(key="profile").set_value("Rechtes Testprofil").run()
+    assert app.multiselect[0].value == ["P04", "P09"]
+    click(app, "Stand als Vergleich A merken")
+    saved = app.session_state["comparison"]
+    click(app, "◉  Daten erzeugen")
+    app.slider(key="gen_tendency").set_value(30).run()
+    assert app.session_state["dataset"]["settings"]["tendency"] == 0
+    assert app.session_state["model"] is not None
+    click(app, "↻  Datensatz erzeugen")
+    assert app.session_state["dataset"]["settings"]["tendency"] == 30
+    assert app.session_state["model"] is None
+    assert app.session_state["comparison"] == saved
+    click(app, "⌘  Regeln lernen")
+    assert app.slider(key="support").value == 9
+    click(app, "⌘  Regeln mit Apriori lernen")
+    click(app, "✦  Feed entdecken")
+    assert app.multiselect[0].value == ["P04", "P09"]
+    assert len(app.dataframe) >= 2
+    app.multiselect[0].set_value(["P01"]).run()
+    assert app.selectbox(key="profile").value == "Eigenes fiktives Profil"
+    assert any("unterscheiden" in warning.value for warning in app.warning)
+    click(app, "◉  Daten erzeugen")
+    assert app.slider(key="gen_tendency").value == 30
+
+
+def test_sessions_are_isolated_and_no_model_feed_is_explained():
+    first = AppTest.from_file(APP).run()
+    second = AppTest.from_file(APP).run()
+    first.slider(key="gen_tendency").set_value(-80).run()
+    click(first, "↻  Datensatz erzeugen")
+    assert second.session_state["dataset"]["settings"]["tendency"] == 0
+    click(second, "✦  Feed entdecken")
+    assert any("Zuerst" in info.value for info in second.info)
+    assert not second.text_input
+
+
+def test_no_rules_and_empty_profile_are_valid_outcomes():
+    app = AppTest.from_file(APP).run()
+    click(app, "⌘  Regeln lernen")
+    app.slider(key="support").set_value(50)
+    app.slider(key="confidence").set_value(100).run()
+    click(app, "⌘  Regeln mit Apriori lernen")
+    assert app.session_state["model"]["rules"] == []
+    click(app, "✦  Feed entdecken")
+    assert any("Keine passende Empfehlung" in info.value for info in app.info)
+    app.multiselect[0].set_value([]).run()
     assert not app.exception
-    app.multiselect[0].select("Wednesday").run()
-    assert any("Stranger Things UND Wednesday" in str(frame.value) for frame in app.dataframe)
-    assert not app.error
-
-
-def test_unknown_classroom():
-    app = AppTest.from_file(APP)
-    app.query_params["view"] = "join"
-    app.query_params["room"] = "UNKNOWN"
-    app.run()
-    assert not app.exception
-    assert not app.error
-    assert any("Klassencode" in info.value for info in app.info)
-
-
-def test_teacher_survey_publish_and_student_prediction(monkeypatch, tmp_path):
-    from serieslab.storage import Store
-    import streamlit as st
-    original = Store.__init__
-    monkeypatch.setattr(Store, "__init__", lambda self, url="": original(self, path=str(tmp_path / "class.sqlite")))
-    monkeypatch.setenv("TEACHER_PASSWORD", "Lehrkräft-Passwort-äöü")
-    monkeypatch.setenv("APP_URL", "https://example.streamlit.app")
-    st.cache_resource.clear()
-    teacher = AppTest.from_file(APP).run()
-    teacher.radio[0].set_value("Meine Klasse").run()
-    teacher.text_input[0].set_value("wrong")
-    next(button for button in teacher.button if button.label == "Neuen Klassenraum erstellen").click().run()
-    assert any("stimmt nicht" in error.value for error in teacher.error)
-    teacher.text_input[0].set_value("Lehrkräft-Passwort-äöü")
-    click(teacher, "Neuen Klassenraum erstellen")
-    code, secret = teacher.session_state["owner"]
-    store = Store()
-    student = AppTest.from_file(APP)
-    student.query_params.update({"view": "join", "room": code})
-    student.run()
-    assert len(student.radio) == 20
-    assert all(radio.value == "Nein" for radio in student.radio)
-    click(student, "Meine Vorlieben teilen →")
-    assert store.transactions(code, secret) == []
-    assert student.warning
-    student.checkbox[0].check()
-    click(student, "Meine Vorlieben teilen →")
-    assert store.transactions(code, secret) == [[]]
-    for radio in student.radio:
-        radio.set_value("Ja" if radio.label.split(" · ", 1)[1] in ["Wednesday", "Stranger Things"] else "Nein")
-    student.checkbox[0].check()
-    click(student, "Meine Vorlieben teilen →")
-    assert store.transactions(code, secret) == [["Stranger Things", "Wednesday"]]
-    for radio in student.radio:
-        radio.set_value("Nein")
-    click(student, "Meine Vorlieben teilen →")
-    assert store.transactions(code, secret) == [[]]
-    for radio in student.radio:
-        radio.set_value("Ja" if radio.label.split(" · ", 1)[1] in ["Wednesday", "Stranger Things"] else "Nein")
-    click(student, "Meine Vorlieben teilen →")
-    assert len(store.transactions(code, secret)) == 1
-    store.submit(code, "second-student", ["One Piece"])
-    click(teacher, "Antworten aktualisieren ↻")
-    click(teacher, "Sammlung schließen")
-    click(teacher, "✳ Regeln lernen")
-    click(teacher, "✳ Modell lernen & für die Klasse veröffentlichen")
-    assert store.room(code)["model"]["n"] == 2
-    click(student, "Veröffentlichtes Modell aktualisieren")
-    student.multiselect[0].set_value(["Wednesday"]).run()
-    assert not student.error
-    assert not student.exception
-    assert any("Konfidenz 100%" in caption.value for caption in student.caption)
-    st.cache_resource.clear()
+    assert any("mindestens einen Like" in info.value for info in app.info)

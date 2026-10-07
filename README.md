@@ -1,10 +1,12 @@
-# ✳ SeriesLab
+# ✕ FeedLab — Wer formt deinen Feed?
 
-Eine deutschsprachige Python-Web-Anwendung für eine interaktive Unterrichtsstunde: Eine Klasse sammelt Serienvorlieben und baut daraus ein erklärbares Empfehlungssystem. Vier klickbare Prozessknoten zeigen Antworten, Datenmatrix, gelernte Regeln und Empfehlungen. Hinter jedem Knoten lässt sich der tatsächlich ausgeführte Python-Code ansehen.
+Ein mobiles Python-Lernlabor im Stil eines Social-Media-Feeds. Studierende erzeugen eine **vollständig fiktive Community**, untersuchen deren Likes, lernen mit **mlxtend** Assoziationsregeln und experimentieren mit Empfehlungen politischer Posts für fiktive Testprofile.
 
-## Lokal starten
+Unabhängiges Lehrprojekt, nicht mit X verbunden. Kein Scraping, keine X-API, keine echten Accounts, keine Befragung von Studierenden und keine Speicherung persönlicher politischer Einstellungen.
 
-Python 3.11 oder neuer. Im Projektverzeichnis:
+## Sofort starten
+
+Python 3.11 oder neuer, im Projektverzeichnis:
 
 ```powershell
 python -m venv .venv
@@ -12,93 +14,96 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m streamlit run app.py
 ```
 
-Im Browser `http://localhost:8501` öffnen. Die Demo mit 24 ausdrücklich synthetischen Antworten funktioniert sofort und verändert keine Klassenantworten.
+`http://localhost:8501` öffnen. Ein vorbereiteter Datensatz mit 300 fiktiven Personen ist sofort verfügbar. Jede Browser-Sitzung hat ein unabhängiges Experiment. Passwörter, Datenbank und Hosting-Secrets werden nicht benötigt.
 
-Für eigene Klassenräume `.streamlit/secrets.toml.example` nach `.streamlit/secrets.toml` kopieren. `TEACHER_PASSWORD` durch ein eigenes langes Passwort ersetzen. Lokal die Beispielzeile `DATABASE_URL` entfernen: Ohne diese Einstellung wird automatisch SQLite in `data/classroom.sqlite3` verwendet. `APP_URL` auf die erreichbare Adresse ohne abschließenden Pfad oder Query setzen, lokal etwa `http://localhost:8501`. Für Smartphones im selben WLAN die LAN-IP des Computers verwenden und gegebenenfalls Port 8501 in der Firewall freigeben; `localhost` auf dem Smartphone verweist auf das Smartphone selbst.
+## Lernpfad
 
-## Ablauf für eine Schulstunde (ca. 25 Minuten)
+1. **Daten erzeugen:** Politische Tendenz, Polarisierung, Vorliebe für ähnliche Positionen und Aktivität verändern. Optional 50–1.000 Personen und einen Seed einstellen. Erst „Datensatz erzeugen“ übernimmt geänderte Regler und verwirft das alte Modell.
+2. **Likes verstehen:** Einzelne fiktive Personen mit Like-Chancen und tatsächlichen Zufallsergebnissen, alle Transaktionen, alle Post-Texte, die politische Verteilung und eine 0/1-Matrix ansehen. Datensatz als JSON oder Matrix als CSV herunterladen.
+3. **Regeln lernen:** Mindest-Support und Mindest-Konfidenz einstellen. Apriori findet häufige Post-Kombinationen; `association_rules()` erzeugt Regeln. Einzel- und Kombinationsregeln lassen sich untersuchen und nachrechnen.
+4. **Feed entdecken:** Ein linkes, mittiges, rechtes oder gemischtes **fiktives** Testprofil auswählen oder dessen Likes selbst zusammenstellen. Neue Posts mit konkreter Regelerklärung ansehen. Einen Stand als A speichern, die Daten verändern, erneut lernen und den Feed B vergleichen.
 
-**Passwort:** Nur `.streamlit/secrets.toml` wird geladen; `.streamlit/secrets.toml.example` ist eine Vorlage. Nach Änderungen die App neu starten. Umgebungsvariablen haben Vorrang. Das Lehrkraft-Passwort erstellt Räume; der separate Verwaltungsschlüssel öffnet einen bestehenden Raum. Umlaute werden unterstützt.
+Alle Schritte zeigen den tatsächlich verwendeten Python-Code in einem aufklappbaren Bereich. Die Navigation bleibt auf schmalen Smartphone-Bildschirmen als 2×2-Auswahl bedienbar; breite Datentabellen sind horizontal scrollbar.
 
-**Fragebogen:** Bei allen 20 Serien ist **Nein vorausgewählt**. Nur bekannte und beliebte Serien auf Ja stellen. Auch überall Nein ist eine gültige Antwort. Nein kann Abneigung, Nichtkennen oder eine nicht bearbeitete Zeile bedeuten; das Modell unterscheidet diese Fälle nicht. In der Datenbank werden alle Ja/Nein-Werte gespeichert, Training und Export verwenden die Ja-Titel. Ein Raum behält seinen Serienkatalog; für den 20er-Katalog einen neuen Raum erstellen.
+## Datendesign: viele Personen, derselbe Post-Katalog
 
-1. **Entdecken (3 Min.):** Demo öffnen. Frage: „Woher weiß ein Streamingdienst, was ich mag?“
-2. **Sammeln (5 Min.):** „Meine Klasse“ wählen, Lehrkraft-Passwort eingeben und Raum erstellen. Den privaten Verwaltungsschlüssel sichern. Im ersten Knoten Teilnahme-Link oder QR-Code zeigen. Die Klasse öffnet den Fragebogen und wählt bekannte, beliebte Serien. Mit „Antworten aktualisieren“ den aktuellen Stand abrufen; anschließend Sammlung schließen.
-3. **Verstehen (5 Min.):** Zweiten Knoten öffnen. Zeilen sind Antworten, Spalten Serien. Eine Null bedeutet „nicht gewählt“, nicht zwingend „mag ich nicht“.
-4. **Lernen (7 Min.):** Im dritten Knoten Support und Konfidenz einstellen und „Modell lernen & für die Klasse veröffentlichen“ drücken. Eine Regel gemeinsam nachrechnen. Die Schwellenwerte verändern und erneut lernen: Welche Regeln verschwinden?
-5. **Anwenden (5 Min.):** Vierten Knoten ausprobieren. Schülerinnen und Schüler können auf ihrem Teilnahme-Link zum Tab „Empfehlungen entdecken“ wechseln und das veröffentlichte Modell aktualisieren. Diese Auswahl wird nicht in die Trainingsdaten geschrieben.
+**Eine Transaktion = alle gelikten Post-IDs einer fiktiven Person.** Eine einzelne Person mit vielen Posts würde nur eine Transaktion liefern. Für gemeinsame Like-Muster simulieren wir deshalb viele Personen, die denselben Katalog sehen.
 
-Der Lernpfad ist bewusst fest vorgegeben, kein frei verdrahtbarer KNIME-Editor. Training und Anwenden bleiben getrennte Schritte. Neue Antworten oder veränderte Regler ändern ein bereits gelerntes Modell erst beim nächsten Training.
+Der Katalog enthält 20 kurze, selbst verfasste Posts: vier Themen (Wirtschaft, Klima, Digitales, Europa), jeweils mit fünf fest zugeordneten Modell-Positionen −1, −0,5, 0, +0,5, +1. Accounts und Texte sind erfunden. Die Labels „stark links“ bis „stark rechts“ sind **didaktische Modellannahmen**, keine empirische politische Taxonomie. Reale Haltungen sind mehrdimensional; beispielsweise ist Technologieoffenheit kein eindeutiges Kennzeichen einer bestimmten politischen Gruppe. Die Simulation behauptet keine Haltung oder Verbindung realer Personen oder Parteien.
 
-## Kostenlos hosten
+**Die Items des Lernverfahrens sind Post-IDs, nicht politische Tags.** Tags und Texte dienen der Interpretation. Politische Nähe beeinflusst ausschließlich die synthetische Datengenerierung. Das Modell entdeckt die so erzeugten Zusammenhänge nur über die Likes.
 
-**Netlify-Ordnerupload funktioniert für diese App nicht.** SeriesLab ist eine Streamlit-Anwendung und benötigt einen laufenden Python-Server (`streamlit run app.py`). Der Ordner enthält keine statische `index.html`. Ein Netlify-Upload startet den Python-Server nicht und führt deshalb zu „Page not found“. Eine zusätzliche HTML-Datei oder eine Weiterleitungsregel würde das Python-Backend nicht ersetzen. Verwende für dieses Projekt den folgenden Streamlit-Deploymentweg.
+## Wie die Regler wirken
 
-Bei einem manuellen Upload des gesamten Projektordners werden Dateien nicht durch `.gitignore` geschützt. Falls dabei `.streamlit/secrets.toml` oder `data/` mit hochgeladen wurden, entferne den betreffenden Deploy und ändere die darin enthaltenen Zugangsdaten. Veröffentliche nur den Quellcode über GitHub; Secrets gehören in die geschützten Einstellungen des Hostinganbieters.
-
-Vorbereitet für **Streamlit Community Cloud + Neon PostgreSQL**. Die Anbieter führen kostenlose Tarife; Kontingente und Bedingungen vor dem Einsatz kontrollieren. Ein Hostingkonto, ein GitHub-Repository und ein Datenbankkonto werden von dir eingerichtet. Das Projekt ist noch nicht veröffentlicht.
-
-1. Projekt in ein GitHub-Repository hochladen. Niemals `.streamlit/secrets.toml`, `data/` oder Zugangsdaten hochladen; `.gitignore` ist vorbereitet.
-2. Bei [Neon](https://neon.com/pricing) ein PostgreSQL-Projekt im kostenlosen Tarif anlegen. Möglichst eine zur Schule passende Region wählen. Den Connection-String mit `sslmode=require` kopieren.
-3. Bei [Streamlit Community Cloud](https://docs.streamlit.io/deploy/streamlit-community-cloud) eine App aus dem Repository erstellen, Einstiegspunkt `app.py`, Python 3.11 oder neuer.
-4. In den erweiterten Einstellungen der App unter **Secrets** eintragen:
-
-```toml
-DATABASE_URL = "postgresql://USER:PASSWORD@HOST/DATABASE?sslmode=require"
-TEACHER_PASSWORD = "eigenes-langes-passwort"
-APP_URL = "https://DEINE-APP.streamlit.app"
-```
-
-5. App starten. Die Tabellen werden automatisch angelegt. Einen Klassenraum erstellen, den Teilnahme-Link auf einem zweiten Gerät testen, eine Antwort absenden und ein Modell veröffentlichen.
-
-**Dauerhafte Speicherung:** Streamlit garantiert keine Beständigkeit lokaler Dateien in Community Cloud. Deshalb dort PostgreSQL verwenden, nicht SQLite. Siehe [Streamlit-Dokumentation zur Speicherung](https://docs.streamlit.io/develop/concepts/connections/connecting-to-data). Kostenlose Dienste können bei Inaktivität schlafen oder bei ausgeschöpften Kontingenten pausieren. Die App vor der Veranstaltung öffnen und die lokale Demo als Ausweichmöglichkeit bereithalten.
-
-## Was das Modell macht
-
-`serieslab/model.py` verwendet **mlxtend**: `apriori()` findet häufige Serienkombinationen, `association_rules()` erzeugt Regeln und berechnet Support, Konfidenz und Lift. Einstellbar sind Mindest-Support und Mindest-Konfidenz. Unterstützt werden auch Kombinationen wie `[A, B] → [C]`. Um bei dichten Antworten auf kostenlosem Hosting eine Explosion der Regelanzahl zu vermeiden, verwendet Apriori intern fest `max_len=4` (höchstens drei Voraussetzungen plus ein Ziel). Das ist eine technische Suchbegrenzung, kein Qualitätsmaß und kein Bedienparameter. Es werden keine externen KI-Dienste, Netflix-Konten oder APIs benötigt.
-
-Bibliotheksdokumentation: [Apriori](https://rasbt.github.io/mlxtend/user_guide/frequent_patterns/apriori/) und [Assoziationsregeln](https://rasbt.github.io/mlxtend/user_guide/frequent_patterns/association_rules/). Die getestete Version `mlxtend==0.23.4` steht in `requirements.txt`. Im Python-Tab des Lernknotens sind die tatsächlichen Bibliotheksaufrufe sichtbar.
-
-Für jede gerichtete Regel X → Y (X ist eine Menge aus ein bis drei Serien, Y eine Zielserie):
-
-- **Support:** Antworten mit Ja zu ALLEN Serien aus X und zu Y / alle Antworten (auch reine Nein-Antworten).
-- **Konfidenz:** Antworten mit Ja zu ALLEN Serien aus X und zu Y / Antworten mit Ja zu ALLEN Serien aus X.
-- **Lift:** Konfidenz / Anteil der Antworten mit Ja zu Y. Über 1 bedeutet einen positiven Zusammenhang gegenüber der allgemeinen Häufigkeit von Y.
-
-Empfehlungen verwenden passende Regeln mit Lift > 1 und blenden bereits ausgewählte Serien aus. **Alle Voraussetzungen müssen erfüllt sein (UND).** Bei `[A, B] → [C]` genügt A allein nicht; zusätzliche ausgewählte Serien sind erlaubt. Sortierung: **Konfidenz absteigend, dann Support, dann Lift**. Erst bei identischen Kennzahlen wird die kürzere Regel für die Erklärung gewählt. Pro Zielserie zählt die bestplatzierte Regel; überlappende Regeln werden nicht addiert. Höchstens sechs unterschiedliche Zielserien werden vorgeschlagen. Unter „Alle passenden Regeln“ bleiben Einzel- und Kombinationsregeln sichtbar. Ohne passende Regel gibt es keine Empfehlung. Bereits gespeicherte Modelle bleiben lesbar; erneutes Training verwendet die neue feste Suchbegrenzung.
-
-### Fachliche Prüfung der Empfehlungen (20.09.2026)
-
-Der UND-Abgleich der Voraussetzungen und der Ausschluss bereits bekannter Ziele entsprechen regelbasierten Empfehlungsverfahren. Es gibt aber **keine universell vorgeschriebene Rangfolge** für Empfehlungen aus Assoziationsregeln. Die Fachliteratur beschreibt unter anderem Konfidenz, angepasste Konfidenz sowie Maximum oder Aggregation mehrerer Regeln: [Feremans & Goethals, Scalable Evaluation of Rule-Based Recommender Systems, Abschnitte 2–3](https://adrem.uantwerpen.be/bibrem/pubs/rule-based.pdf).
-
-Die frühere Strategie „längere Regel zuerst“ wurde entfernt. Beispiel: A → C mit 90 % Konfidenz wurde durch A UND B → C mit 70 % verdrängt, nur weil diese Regel länger war. Ebenso ist hoher Lift keine hohe Trefferwahrscheinlichkeit: Seltene Ziele können trotz niedriger Konfidenz hohe Lift-Werte haben. Deshalb wird nun die maximale Konfidenz je Ziel verwendet, bei Gleichstand entscheiden Support und Lift. Diese transparente Baseline ist eine bewusste Implementierungsentscheidung, keine durch mlxtend vorgegebene oder für jede Klasse optimale Strategie. Auch die beste Einzelregel beschreibt nicht automatisch die bedingte Wahrscheinlichkeit für die gesamte Auswahl.
-
-**Fehlprognosen bleiben möglich:** kleine Stichproben, Auswahl der stärksten aus vielen Regeln und ähnliche Geschmäcker können die Trainingskennzahlen optimistisch machen. „Nein“ als Vorgabe lässt nicht erkennen, ob eine Serie aktiv abgelehnt oder übersehen wurde. Deshalb wird Nein nicht als gesichertes negatives Trainingslabel verwendet. Für eine belastbare Trefferquote müssten Personen in Trainings- und Testgruppen getrennt und in der Testgruppe ein Teil der Ja-Antworten zurückgehalten werden; anschließend etwa Recall@6 und die Abdeckung mit einer Popularitätsbaseline vergleichen. Solche unabhängigen Klassentestdaten liegen hier nicht vor. Automatische Tests prüfen Rechenwerte und Regelanwendung, nicht den Geschmack zukünftiger Schüler.
-
-Konfidenz ist keine auf Testdaten gemessene Genauigkeit. Bei kleinen Stichproben können große Lift-Werte zufällig entstehen. Es gibt keinen Train/Test-Split und keine Behauptung über Vorhersagequalität. Das Projekt demonstriert unüberwachtes Musterlernen, nicht die tatsächliche Netflix-Technik.
-
-## Daten & Verwaltung
-
-Keine Namen, E-Mail-Adressen oder Geburtsdaten werden abgefragt. Pro Antwort speichert die App Serien und einen gehashten zufälligen Teilnahmeschlüssel. Dieser Schlüssel bleibt in der Streamlit-Sitzung; wiederholtes Absenden dort aktualisiert die Antwort. Nach Neuladen oder in einem anderen Browser sind weitere Antworten möglich. Es gibt keinen sicheren Nachweis „eine Person, eine Stimme“. Für eine betreute Unterrichtsstunde ausgelegt, nicht für öffentliche Abstimmungen.
-
-Antworten sind nur über den privaten Verwaltungsschlüssel zugänglich. Der Teilnahme-Link enthält ausschließlich den Klassencode. Das veröffentlichte Modell enthält aggregierte Regeln und Häufigkeiten, die Teilnehmende sehen können. Hostanbieter können unabhängig von der Anwendung Verbindungsprotokolle führen. Die Lehrkraft sollte Nutzung und Serienauswahl mit den schulischen Vorgaben abstimmen und danach den Raum über „Verwaltung & Datensicherung“ löschen. Zuvor bei Bedarf Antworten als JSON, Matrix als CSV und Modell als JSON herunterladen. Exporte dienen der Sicherung/externen Weiterverarbeitung; ein Wiederimport ist nicht implementiert.
-
-Die Serienliste ist eine anpassbare Unterrichtsauswahl in `CATALOG` in `serieslab/model.py`, keine Zusage aktueller Netflix-Verfügbarkeit oder Alterseignung. Vor einer Veranstaltung prüfen und bei Anpassungen neue Räume anlegen. Keine Poster oder fremden Markenbilder werden eingebunden.
-
-## Projektstruktur & Tests
-
-### Serienauswahl (Recherche: 18.09.2026)
-
-Stranger Things, Wednesday, One Piece, Outer Banks, Ginny & Georgia, My Life with the Walter Boys, Heartstopper, XO, Kitty, Never Have I Ever, Sex Education, Young Royals, A Good Girl’s Guide to Murder, Forever, Finding Her Edge, Squid Game, Alice in Borderland, Bridgerton, Cobra Kai, Avatar – Der Herr der Elemente und Arcane.
-
-Die Liste kombiniert Young-Adult-Serien und bekannte Streaming-Hits. Sie ist eine redaktionelle Annäherung an 17–20-Jährige, **keine statistisch belegte aktuelle Top 20 dieser Altersgruppe in Deutschland**. Grundlagen: [Netflix’ Teen-Serienübersicht vom August 2026](https://www.netflix.com/tudum/articles/teen-shows-on-netflix), [Young-Adult-Übersicht 2026](https://www.netflix.com/tudum/articles/new-young-adult-shows-movies), [Nutzungsbericht zweites Halbjahr 2025](https://about.netflix.com/en/news/what-we-watched-the-second-half-of-2025) und [Serienvorschau 2026](https://www.netflix.com/tudum/articles/new-shows-on-netflix-2026). Die Quellen liefern keine vollständige 17–20-Demografie.
+Für jede Person wird eine Position `z` erzeugt:
 
 ```text
-app.py                    Oberfläche, Knoten, Fragebogen, Lehrkraftbereich
-serieslab/model.py        Kodierung, Kombinationsregeln, Empfehlungen, Demodaten
-serieslab/storage.py      Räume, Berechtigungen, SQLite/PostgreSQL
-tests/                    Rechenbeispiele, Speicher- und Oberflächentests
-.streamlit/               Design und Konfigurationsvorlage
+z = clip(Tendenz / 100 + Gruppe × Polarisierung / 125 + Rauschen, -1, 1)
+Gruppe ∈ {-1, +1}, gleich wahrscheinliche Ziehung
+Rauschen ~ Normalverteilung(0, 0.20)
+```
+
+- **Tendenz −100 … +100:** verschiebt das Zentrum der Bevölkerung nach links/rechts. Sie ist keine exakte Vorgabe für den empirischen Mittelwert.
+- **Polarisierung 0 … 100:** trennt zwei Teilgruppen. Bei 0 liegen sie gemeinsam um das Zentrum, bei 100 deutlich auseinander. An den Achsengrenzen wird abgeschnitten; bei starker Tendenz entstehen daher asymmetrische Gruppen.
+- **Vorliebe für ähnliche Positionen 0 … 100:** bestimmt die Stärke politischer Nähe beim Liken. Bei 0 haben politische Positionen keinerlei Einfluss auf die Likes; Themenmuster und Zufall bleiben.
+- **Like-Aktivität 0 … 100:** verändert die allgemeine Like-Neigung. Der Reglerwert ist nicht der Prozentsatz gelikter Posts.
+
+Für jede Person und jeden Post ergibt sich die Like-Chance aus einer logistischen Funktion:
+
+```text
+s = -2.8 + 4 × Aktivität/100 + persönliche_Aktivität + Themeninteresse
+    + 5 × Ähnlichkeitsliebe/100 × (0.65 - abs(z - Postposition))
+P(Like) = 1 / (1 + exp(-s))
+```
+
+Persönliche Aktivität wird aus `Normal(0, 0.35)`, Themeninteresse pro Person und Thema aus `Normal(0, 0.65)` gezogen. Ein gleichverteilter Zufallswert entscheidet dann über den einzelnen Like. Diese Koeffizienten sind transparente, frei gesetzte Unterrichtsannahmen, **nicht aus X-Daten geschätzt**. Hohe Wahrscheinlichkeit garantiert keinen Like.
+
+Alle 20 Posts gelten modellhaft als gesehen. Wir modellieren keine reale Ausspielungslogik, Bots, Retweets, zeitliche Reihenfolge oder ungleiche Sichtbarkeit. Ein Nicht-Like ist kein Beweis für Ablehnung. Leere Like-Sammlungen bleiben als Transaktionen erhalten.
+
+Gleiche Einstellungen und gleicher Seed erzeugen dieselben Daten. Bei festem Seed und gleicher Personenanzahl bleiben die Zufallsziehungen gleich, wenn einzelne Regler verändert werden. Damit lassen sich Annahmen gezielt vergleichen. Verschiedene Seeds zeigen die Unsicherheit kleiner Stichproben.
+
+## Lernen & Empfehlen
+
+`feedlab/model.py` verwendet `mlxtend.frequent_patterns.apriori` und `association_rules`. Die getestete Bibliotheksversion steht in `requirements.txt`. Intern begrenzt `max_len=4` die Suche auf höchstens drei Voraussetzungen und einen Zielpost, damit dichte Datensätze auf kostenlosem Hosting handhabbar bleiben. Dies ist keine einstellbare Qualitätsmetrik.
+
+Für X → Y:
+
+- **Support:** Personen mit allen Likes aus X und Y / alle simulierten Personen.
+- **Konfidenz:** Personen mit allen Likes aus X und Y / Personen mit allen Likes aus X.
+- **Lift:** Konfidenz / allgemeine Like-Häufigkeit von Y.
+
+Bei der Empfehlung müssen **alle Voraussetzungen** gewählt sein. Bereits gelikte Posts werden ausgeblendet; nur Regeln mit Lift > 1 kommen infrage. Sortierung: Konfidenz, dann Support, dann Lift; bei gleichen Werten die kürzere Regel. Pro Zielpost zählt nur die bestplatzierte Regel, maximal sechs Ziele. Mehrere passende Regeln werden nicht addiert. Kombinationen bleiben vollständig berücksichtigt, erhalten aber keinen pauschalen Vorrang.
+
+Es gibt keinen universell besten Regel-Rankingstandard. Die gewählte Maximum-Konfidenz-Baseline ist erklärbar, aber weder eine kalibrierte Wahrscheinlichkeit für die gesamte Auswahl noch eine Garantie gegen Fehlprognosen. Quellen: [mlxtend Apriori](https://rasbt.github.io/mlxtend/user_guide/frequent_patterns/apriori/), [mlxtend Assoziationsregeln](https://rasbt.github.io/mlxtend/user_guide/frequent_patterns/association_rules/), [Feremans & Goethals: Scalable Evaluation of Rule-Based Recommender Systems](https://adrem.uantwerpen.be/bibrem/pubs/rule-based.pdf).
+
+## Experimente für Studierende
+
+**A. Gleiches Profil, andere Bevölkerung:** Stand A speichern, nur die Tendenz ändern, Daten erzeugen und neu lernen. Gleiches Testprofil, gleiche Schwellen, gleicher Seed. Welche Posts wechseln?
+
+**B. Ohne politische Nähe:** Ähnlichkeitsliebe auf 0 stellen. Themeninteressen können weiterhin Regeln erzeugen. Ein verbliebener politisch markierter Treffer beweist deshalb keine politische Ursache.
+
+**C. Polarisierung bei gleicher Mitte:** Tendenz auf 0 belassen, Polarisierung ändern. Die Mitte einer Verteilung sagt nichts darüber aus, ob sich zwei gegensätzliche Gruppen gegenüberstehen.
+
+**D. Zufall und Stichprobengröße:** Gleiche Regler, anderer Seed; anschließend mehr Personen. Welche Regeln sind stabil? Trainingskonfidenz ist keine auf neuen Personen geprüfte Genauigkeit.
+
+Die Feed-Auswertung zeigt die Verteilung der fest vergebenen Post-Tags und deren ungewichteten Mittelwert. Ein Mittelwert von 0 kann sowohl mittige als auch gegensätzliche Posts bedeuten. **Eine einzige Empfehlungsrunde belegt weder eine dauerhafte Filterblase noch eine Änderung politischer Überzeugungen.** Die Simulation macht ihre eingebauten Annahmen sichtbar; sie validiert keine Aussage über den echten X-Algorithmus.
+
+## Speicherung und Hosting
+
+Es gibt keine Erhebung echter Schülerdaten, keine Anmeldung und keinen Datenbankzugriff. Daten, Testprofil und Vergleich liegen nur im flüchtigen Streamlit-Sitzungsspeicher. Neuladen/Verbindungsabbruch kann das Experiment zurücksetzen. Downloads sichern ausschließlich synthetische Daten auf Wunsch lokal. Server/Hostinganbieter können technische Verbindungsprotokolle führen; Streamlit-Nutzungsstatistiken sind deaktiviert.
+
+Das bestehende öffentliche GitHub-Repository bleibt `profsp/awi_netflix_project`, damit eine bestehende Streamlit-Verknüpfung weiter funktioniert. Für Streamlit Community Cloud: Repository auswählen, Branch `main`, Einstiegspunkt `app.py`, Python 3.11 oder neuer. **Keine Secrets oder externe Datenbank erforderlich.** Die App benötigt weiterhin einen Python-Server; Netlify-Ordnerupload reicht nicht aus.
+
+Bei einem Update von SeriesLab sind Fragebogen, Räume, Passwortzugang und SQLite/PostgreSQL-Code entfernt. Frühere lokale Dateien in `data/` und vorhandene externe Datenbanken werden nicht automatisch gelöscht, aber von FeedLab nicht gelesen. Alte `TEACHER_PASSWORD`, `APP_URL` und `DATABASE_URL`-Secrets können aus den Hosting-Einstellungen entfernt werden. Bestehende Serienmodelle werden nicht importiert. Frühere Teilnahme-Links öffnen die neue Laborseite.
+
+## Projekt & Tests
+
+```text
+app.py                  Mobiler Lernpfad, Datenansicht, Feed und A/B-Vergleich
+feedlab/catalog.py      20 fiktive Posts, Modell-Tags und Testprofile
+feedlab/synthetic.py    Reproduzierbarer Datengenerator
+feedlab/model.py        mlxtend-Training und Regelanwendung
+tests/                  Rechenwerte, Generatoreffekte, Zustände, UI-Ablauf
 ```
 
 ```powershell
@@ -106,4 +111,4 @@ python -m pip install pytest
 python -m pytest -q
 ```
 
-Tests prüfen bekannte Support-/Konfidenz-/Lift-Werte, Filter, Raumtrennung, Zugriffsschutz, Aktualisierung statt Duplikat, gleichzeitige Abgaben und den Demo-Lernpfad mit Streamlit AppTest. PostgreSQL sollte vor der Veranstaltung zusätzlich mit den tatsächlichen Hosting-Zugangsdaten geprüft werden.
+Tests prüfen unter anderem Reproduzierbarkeit, Richtung der Generatorregler, politische Unabhängigkeit bei Ähnlichkeitsliebe 0, exakte Regelkennzahlen, UND-Bedingungen, Modellrücksetzung nach neuen Daten, Sitzungstrennung und den kompletten A/B-Lernpfad. Sie messen keine Vorhersagequalität auf realen politischen Daten.
