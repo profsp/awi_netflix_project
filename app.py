@@ -420,7 +420,7 @@ def main():
     defaults()
     st.html('<div class="topbar"><div class="brand"><b>✕</b>Feed<span>Lab</span></div><div class="lab-label">SOCIAL ALGORITHM LAB</div></div>')
     if st.session_state.step == 0:
-        st.html('<div class="kicker">Deine Mission im Produktteam</div><h1>Gleiche Likes.<br>Anderer <span class="blue">Feed?</span></h1><div class="hero-sub">Ein Empfehlungssystem ist nicht nur Code. Daten, Ziele und Produktentscheidungen bestimmen, was Menschen sehen.</div>')
+        st.html('<div class="kicker">Deine Mission in der Wirtschaftsinformatik</div><h1>Viele Likes.<br>Eine <span class="blue">Bubble?</span></h1><div class="hero-sub">Ein Empfehlungssystem ist nicht nur statischer Code. Nutzer-Interaktionen, Plattform-Ziele und Parameterdesign bestimmen, was Menschen sehen.</div>')
     else:
         st.html('<div class="kicker">Dein Experiment · 100 % synthetisch</div>')
     dataset = st.session_state.dataset
